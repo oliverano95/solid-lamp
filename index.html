@@ -162,14 +162,14 @@
             const jsonString = JSON.stringify(finalData);
 
             // Show it to you so you can see what the computer built
-            alert("Success! Here is the JSON data that will be sent to the watch:\n\n" + jsonString);
+            //alert("Success! Here is the JSON data that will be sent to the watch:\n\n" + jsonString);
 
             // --- PEBBLE SPECIFIC CODE ---
             // When running inside the Pebble app, this line tells the phone 
             // to close this web page and send the JSON back to the watch.
             // (We comment it out for now so it doesn't break while you test on your computer)
             
-            // window.location.href = "pebblejs://close#" + encodeURIComponent(jsonString);
+            window.location.href = "pebblejs://close#" + encodeURIComponent(jsonString);
         }
     </script>
 </body>
