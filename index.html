@@ -98,7 +98,7 @@
             }
         };
 
-        function addExercise() {
+function addExercise() {
             const name = document.getElementById("exerciseSelect").value;
             const sets = document.getElementById("targetSets").value;
             const reps = document.getElementById("targetReps").value;
@@ -109,7 +109,10 @@
                 return;
             }
 
-            const newExercise = { exerciseName: name, sets: parseInt(sets), reps: parseInt(reps), weight: parseInt(weight) };
+            // SHRUNK DATA: We removed the labels and just made a simple array!
+            // Order is always: [Name, Sets, Reps, Weight]
+            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight)];
+            
             myRoutine.push(newExercise);
 
             document.getElementById("emptyMessage").style.display = "none";
@@ -144,16 +147,18 @@
                 return;
             }
 
-            const finalData = { name: routineName, exercises: myRoutine };
+            // SHRUNK DATA: "n" is Name, "e" is Exercises
+            const finalData = { 
+                n: routineName, 
+                e: myRoutine 
+            };
+            
             const jsonString = JSON.stringify(finalData);
 
-            // Hide the alert so it doesn't block the screen
-            // alert("Sending: " + jsonString);
+            // You can uncomment this alert to see how tiny the JSON is now!
+            // alert("Sending Shrunk JSON:\n" + jsonString + "\n\nLength: " + jsonString.length + " characters");
 
-            // Find the correct return URL (CloudPebble vs Real Phone)
             var returnTo = getQueryParam('return_to', 'pebblejs://close#');
-            
-            // Redirect using the correct URL
             window.location.href = returnTo + encodeURIComponent(jsonString);
         }
     </script>
