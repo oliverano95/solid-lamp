@@ -325,17 +325,24 @@
         }
 
         function saveAndSend() {
-            const routineName = document.getElementById("routineName").value;
+            const routineName = document.getElementById("routineName").value || "My Routine";
             if (myRoutine.length === 0) {
                 alert("Please add at least one exercise.");
                 return;
             }
 
-            const finalData = { n: routineName, e: myRoutine };
-            const jsonString = JSON.stringify(finalData);
+            // Start the string with the routine name
+            let delimitedString = routineName;
+
+            // Loop through our array and add each piece separated by a pipe "|"
+            for (let i = 0; i < myRoutine.length; i++) {
+                let ex = myRoutine[i]; // [Name, Sets, Reps, Weight]
+                delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3];
+            }
 
             var returnTo = getQueryParam('return_to', 'pebblejs://close#');
-            window.location.href = returnTo + encodeURIComponent(jsonString);
+            // Send the flat string instead of JSON!
+            window.location.href = returnTo + encodeURIComponent(delimitedString);
         }
     </script>
 </body>
