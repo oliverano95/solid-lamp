@@ -1,0 +1,50 @@
+{
+    "author": "oliben10@gmail.com",
+    "dependencies": {},
+    "keywords": [],
+    "name": "gymtracker",
+    "pebble": {
+        "capabilities": [
+            "health"
+        ],
+        "displayName": "GymTracker",
+        "enableMultiJS": true,
+        "messageKeys": [
+            "ROUTINE_DATA",
+            "WORKOUT_SUMMARY"
+        ],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "images/LOGO",
+                    "menuIcon": true,
+                    "name": "GYMTRACKER_LOGO",
+                    "targetPlatforms": null,
+                    "type": "png"
+                },
+                {
+                    "file": "images/TROPHY",
+                    "name": "IMAGE_FIREWORKS",
+                    "targetPlatforms": null,
+                    "type": "png"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite",
+            "emery",
+            "gabbro",
+            "flint"
+        ],
+        "uuid": "039ac8f0-f9a6-4c1f-88ca-1217c9296134",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "1.0.0"
+}
