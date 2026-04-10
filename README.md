@@ -45,7 +45,8 @@ For power users, you can bypass the manual CSV download and have the watch beam 
 ### Step 1: Prepare the Google Sheet
 1. Create a brand new [Google Sheet](https://sheets.google.com).
 2. Name it something like "Pebble Gym Logs".
-3. In the top menu, click **Extensions** > **Apps Script**.
+3. In the very first row of your sheet (Row 1), type out the following headers across the columns: **Date** | **Routine** | **Duration (s)** | **Exercise** | **Set #** | **Reps** | **Weight**.
+4. In the top menu, click **Extensions** > **Apps Script**.
 
 ### Step 2: Add the Code
 1. Delete any code currently in the script editor.
