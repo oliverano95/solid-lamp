@@ -72,4 +72,4 @@ For power users, you can bypass the manual CSV download and have the watch beam 
 4. Type your **Secret Password** (the one you set in Step 2) into the second box.
 5. Click **Save & Send to Pebble**.
 
-You're done! Your phone will securely remember this link. The next time you finish a workout on your watch, it will automatically populate a new row in your Google Sheet!
+You're done! Your phone will securely remember this link. The next time you finish a workout on your watch, it will automatically populate the workout in your Google Sheet!
