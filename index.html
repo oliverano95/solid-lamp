@@ -148,12 +148,15 @@
         function renderExerciseDropdown(filterText = "") {
             const dropdown = document.getElementById("exerciseSelect");
             dropdown.innerHTML = ""; 
-            const lowerFilter = filterText.toLowerCase();
+            const lowerFilter = filterText.trim().toLowerCase();
+
+            let matchFound = false;
 
             for (const [group, exercises] of Object.entries(exerciseDatabase)) {
                 const filteredExercises = exercises.filter(ex => ex.toLowerCase().includes(lowerFilter));
 
                 if (filteredExercises.length > 0) {
+                    matchFound = true;
                     const optgroup = document.createElement("optgroup");
                     optgroup.label = "── " + group.toUpperCase() + " ──";
 
@@ -168,7 +171,18 @@
                 }
             }
             
-            if (dropdown.options.length === 0) {
+            // NEW FEATURE: If they typed something, give them the option to use it as a custom exercise!
+            if (filterText.trim() !== "") {
+                const customGroup = document.createElement("optgroup");
+                customGroup.label = "── CUSTOM EXERCISE ──";
+                
+                const customOption = document.createElement("option");
+                customOption.value = filterText.trim();
+                customOption.text = 'Add "' + filterText.trim() + '"';
+                
+                customGroup.appendChild(customOption);
+                dropdown.appendChild(customGroup);
+            } else if (!matchFound) {
                 const option = document.createElement("option");
                 option.text = "No exercises found...";
                 option.disabled = true;
@@ -343,7 +357,10 @@
             }
             renderRoutine(); 
             
-            // Clear inputs, but leave the search bar alone so they can add another chest exercise quickly!
+            // FIX: Clear the search bar and reset the dropdown list for the next exercise
+            document.getElementById("exerciseSearch").value = "";
+            renderExerciseDropdown();
+            
             document.getElementById("targetSets").value = "";
             document.getElementById("targetReps").value = "";
             document.getElementById("targetWeight").value = "";
@@ -354,9 +371,9 @@
         function editExercise(index) {
             let ex = myRoutine[index];
             
-            // Clear the search bar so the full list is available to select the existing exercise
-            document.getElementById("exerciseSearch").value = "";
-            renderExerciseDropdown();
+            // FIX: Put the exercise name into the search bar so it generates the option (even if it's custom!)
+            document.getElementById("exerciseSearch").value = ex[0];
+            renderExerciseDropdown(ex[0]);
             
             document.getElementById("exerciseSelect").value = ex[0];
             document.getElementById("targetSets").value = ex[1];
