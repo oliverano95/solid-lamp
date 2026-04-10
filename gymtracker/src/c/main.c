@@ -28,8 +28,9 @@ static int s_active_slots = 0;
 // --- USER SETTINGS ---
 static int s_set_rest_sec = 60;
 static int s_ex_rest_sec = 90;
-static int s_set_vibe = 3; 
-static int s_ex_vibe = 2;  
+static int s_set_vibe = 1; 
+static int s_ex_vibe = 3;  
+static int s_rest_vibe = 2;  
 static int s_theme_color_idx = 0; 
 static int s_weight_unit_idx = 0; 
 
@@ -94,8 +95,9 @@ static void load_settings() {
   if(persist_exists(SETTINGS_KEY_BASE + 1)) s_ex_rest_sec = persist_read_int(SETTINGS_KEY_BASE + 1);
   if(persist_exists(SETTINGS_KEY_BASE + 2)) s_set_vibe = persist_read_int(SETTINGS_KEY_BASE + 2);
   if(persist_exists(SETTINGS_KEY_BASE + 3)) s_ex_vibe = persist_read_int(SETTINGS_KEY_BASE + 3);
-  if(persist_exists(SETTINGS_KEY_BASE + 4)) s_theme_color_idx = persist_read_int(SETTINGS_KEY_BASE + 4);
-  if(persist_exists(SETTINGS_KEY_BASE + 5)) s_weight_unit_idx = persist_read_int(SETTINGS_KEY_BASE + 5);
+  if(persist_exists(SETTINGS_KEY_BASE + 4)) s_rest_vibe = persist_read_int(SETTINGS_KEY_BASE + 4);
+  if(persist_exists(SETTINGS_KEY_BASE + 5)) s_theme_color_idx = persist_read_int(SETTINGS_KEY_BASE + 5);
+  if(persist_exists(SETTINGS_KEY_BASE + 6)) s_weight_unit_idx = persist_read_int(SETTINGS_KEY_BASE + 6);
 }
 
 static void save_setting(int key_offset, int value) {
@@ -170,7 +172,7 @@ static void refresh_directory() {
 
 
 // --- SETTINGS WINDOW LOGIC ---
-static uint16_t settings_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) { return 6; }
+static uint16_t settings_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) { return 7; }
 
 static void settings_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
   int i = cell_index->row;
@@ -184,8 +186,9 @@ static void settings_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
     case 1: snprintf(title, sizeof(title), "Ex. Rest"); snprintf(subtitle, sizeof(subtitle), "%ds", s_ex_rest_sec); break;
     case 2: snprintf(title, sizeof(title), "Set Vibe"); snprintf(subtitle, sizeof(subtitle), "%s", vibes[s_set_vibe]); break;
     case 3: snprintf(title, sizeof(title), "Ex. Vibe"); snprintf(subtitle, sizeof(subtitle), "%s", vibes[s_ex_vibe]); break;
-    case 4: snprintf(title, sizeof(title), "Theme Color"); snprintf(subtitle, sizeof(subtitle), "%s", themes[s_theme_color_idx]); break;
-    case 5: snprintf(title, sizeof(title), "Weight Unit"); snprintf(subtitle, sizeof(subtitle), "%s", units[s_weight_unit_idx]); break;
+    case 4: snprintf(title, sizeof(title), "Rest Vibe"); snprintf(subtitle, sizeof(subtitle), "%s", vibes[s_rest_vibe]); break;
+    case 5: snprintf(title, sizeof(title), "Theme Color"); snprintf(subtitle, sizeof(subtitle), "%s", themes[s_theme_color_idx]); break;
+    case 6: snprintf(title, sizeof(title), "Weight Unit"); snprintf(subtitle, sizeof(subtitle), "%s", units[s_weight_unit_idx]); break;
   }
   menu_cell_basic_draw(ctx, cell_layer, title, subtitle, NULL);
 }
@@ -196,9 +199,10 @@ static void settings_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
     case 1: s_ex_rest_sec += 30; if(s_ex_rest_sec > 240) s_ex_rest_sec = 0; save_setting(1, s_ex_rest_sec); break;
     case 2: s_set_vibe++; if(s_set_vibe > 3) s_set_vibe = 0; save_setting(2, s_set_vibe); play_vibe(s_set_vibe); break;
     case 3: s_ex_vibe++; if(s_ex_vibe > 3) s_ex_vibe = 0; save_setting(3, s_ex_vibe); play_vibe(s_ex_vibe); break;
-    case 4: s_theme_color_idx++; if(s_theme_color_idx > 3) s_theme_color_idx = 0; save_setting(4, s_theme_color_idx); 
+    case 4: s_rest_vibe++; if(s_rest_vibe > 3) s_rest_vibe = 0; save_setting(4, s_rest_vibe); play_vibe(s_rest_vibe); break;
+    case 5: s_theme_color_idx++; if(s_theme_color_idx > 3) s_theme_color_idx = 0; save_setting(5, s_theme_color_idx); 
             menu_layer_set_highlight_colors(s_settings_menu_layer, get_theme_color(), GColorWhite); break;
-    case 5: s_weight_unit_idx++; if(s_weight_unit_idx > 1) s_weight_unit_idx = 0; save_setting(5, s_weight_unit_idx); break;
+    case 6: s_weight_unit_idx++; if(s_weight_unit_idx > 1) s_weight_unit_idx = 0; save_setting(6, s_weight_unit_idx); break;
   }
   menu_layer_reload_data(s_settings_menu_layer);
 }
@@ -558,7 +562,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     s_rest_seconds_remaining--;
     if (s_rest_seconds_remaining <= 0) {
       skip_rest();
-      vibes_long_pulse(); 
+      play_vibe(s_rest_vibe); 
     } else {
       static char rest_buf[16];
       snprintf(rest_buf, sizeof(rest_buf), "%d", s_rest_seconds_remaining);
