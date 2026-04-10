@@ -168,11 +168,10 @@
                 return;
             }
             
-            let csvContent = "data:text/csv;charset=utf-8,";
-            // Set the headers to perfectly match your Google Sheet
-            csvContent += "Date,Routine,Duration (s),Exercise,Set #,Reps,Weight\n";
+            // Start the CSV string (removed the '#' symbol from Set!)
+            let csvContent = "Date,Routine,Duration (s),Exercise,Set,Reps,Weight\n";
             
-            // Loop through every saved workout in the phone's history
+            // Loop through every saved workout
             workoutHistory.forEach(entry => {
                 const rawString = entry.data;
                 const parts = rawString.split('|');
@@ -184,31 +183,35 @@
                 let currentExercise = "";
                 let setNum = 1;
                 
-                // The Bouncer / Parser logic
+                // Parse the exercises and sets
                 for (let i = 3; i < parts.length; i++) {
                     if (isNaN(parts[i])) {
                         currentExercise = parts[i];
-                        setNum = 1; // Reset set counter for the new exercise
+                        setNum = 1; 
                     } else {
                         let reps = parts[i];
                         let weight = parts[i+1];
                         
-                        // Append the perfectly formatted row to the CSV string
                         csvContent += `${date},${routine},${duration},${currentExercise},${setNum},${reps},${weight}\n`;
                         
                         setNum++;
-                        i++; // Skip the weight index since we just grabbed it
+                        i++; 
                     }
                 }
             });
             
-            const encodedUri = encodeURI(csvContent);
+            // THE FIX: Use a Blob to safely generate the file download!
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
             link.setAttribute("download", "pebble_workouts.csv");
+            link.style.visibility = 'hidden';
+            
             document.body.appendChild(link);
             link.click();
-            link.remove();
+            document.body.removeChild(link);
         }
 
         function clearHistory() {
