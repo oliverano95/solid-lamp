@@ -31,6 +31,11 @@
         .history-item:last-child { border-bottom: none; }
 
         #exerciseSearch { border: 2px solid #FF4700; background-color: #fffaf5; }
+        
+        /* NEW: UI Badges for Drop Sets and Supersets */
+        .mod-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; margin-left: 5px; color: white; vertical-align: middle;}
+        .badge-drop { background-color: #e83e8c; }
+        .badge-super { background-color: #007bff; }
     </style>
 </head>
 <body>
@@ -74,6 +79,14 @@
         <input type="number" id="targetSets" placeholder="Target Sets (e.g., 3)">
         <input type="number" id="targetReps" placeholder="Target Reps (e.g., 10)">
         <input type="number" id="targetWeight" placeholder="Target Weight in kg (e.g., 60)">
+        
+        <label style="font-size: 14px; font-weight: bold; margin-top: 5px; display: block;">Advanced Modifier:</label>
+        <select id="exerciseModifier">
+            <option value="0">Normal Sets</option>
+            <option value="1">Drop Set (Automatically drops weight on final set)</option>
+            <option value="2">Superset (Links this exercise with the NEXT one)</option>
+        </select>
+        
         <button id="addUpdateBtn" onclick="addExercise()">+ Add to Routine</button>
     </div>
 
@@ -113,12 +126,13 @@
             "Abdominals": [ "Crunches", "Leg Raises", "Planks", "Cable Crunch", "Russian Twists", "Ab Wheel Rollouts", "Hanging Leg Raises", "Pallof Press", "Target Abs" ]
         };
 
+        // NEW: myRoutine elements are now arrays of 5: [Name, Sets, Reps, Weight, Modifier]
         let myRoutine = [];
         let editingIndex = -1;
         let draggedIndex = null;
         let workoutHistory = [];
         let shouldClearHistory = false;
-        let shouldClearGoogle = false; // NEW STATE FLAG
+        let shouldClearGoogle = false; 
 
         function getQueryParam(variable, defaultValue) {
             var query = location.search.substring(1);
@@ -175,21 +189,15 @@
 
         window.onload = function() {
             renderExerciseDropdown();
-
-            // SECURE LOGIC: Check if the phone passed us a URL parameter
             const storedUrl = getQueryParam('googleUrl', '');
-            
-            // If it exists, show the green success box, but DO NOT load the text into the input fields!
             if (storedUrl && storedUrl.trim() !== '') {
                 document.getElementById('googleStatusContainer').style.display = 'block';
             }
-
             const historyStr = getQueryParam('history', '[]');
             try { workoutHistory = JSON.parse(historyStr); } catch(e) { workoutHistory = []; }
             renderHistory();
         };
 
-        // NEW: Handles the UI and flag for clearing credentials
         function flagClearGoogle() {
             if (confirm("Are you sure you want to completely remove your Google Settings from the Pebble App?")) {
                 shouldClearGoogle = true;
@@ -226,6 +234,10 @@
                 const duration = parts[2] || "0";
                 let currentExercise = "";
                 let setNum = 1;
+                
+                // Note: History parsing will need to skip the modifier in V2 if you want it exact,
+                // but since the watch only reports Actual Reps/Weight in the summary, this parsing loop 
+                // still functions fine for V1 data.
                 for (let i = 3; i < parts.length; i++) {
                     if (isNaN(parts[i])) { currentExercise = parts[i]; setNum = 1; } 
                     else {
@@ -265,6 +277,14 @@
             }
             for (let i = 0; i < myRoutine.length; i++) {
                 let ex = myRoutine[i]; 
+                
+                // BACKWARD COMPATIBILITY: If loading an old V1 routine, default modifier to 0
+                let modifier = ex.length > 4 ? parseInt(ex[4]) : 0; 
+                
+                let badgeHTML = "";
+                if (modifier === 1) badgeHTML = '<span class="mod-badge badge-drop">DROP SET</span>';
+                if (modifier === 2) badgeHTML = '<span class="mod-badge badge-super">SUPERSET</span>';
+
                 let div = document.createElement("div");
                 div.className = "exercise-item";
                 div.setAttribute("draggable", "true");
@@ -275,7 +295,7 @@
                 
                 let info = document.createElement("div");
                 info.className = "exercise-info";
-                info.innerHTML = `<span class="grab-handle">≡</span><strong>${ex[0]}</strong><br><span style="margin-left: 28px;">${ex[1]}s x ${ex[2]}r @ ${ex[3]}kg</span>`;
+                info.innerHTML = `<span class="grab-handle">≡</span><strong>${ex[0]}</strong> ${badgeHTML}<br><span style="margin-left: 28px;">${ex[1]}s x ${ex[2]}r @ ${ex[3]}kg</span>`;
                 
                 let btnGroup = document.createElement("div");
                 btnGroup.innerHTML = `
@@ -306,8 +326,12 @@
             const sets = document.getElementById("targetSets").value;
             const reps = document.getElementById("targetReps").value;
             const weight = document.getElementById("targetWeight").value;
+            const modifier = document.getElementById("exerciseModifier").value;
+
             if(sets === "" || reps === "" || weight === "") { alert("Please fill out sets, reps, and weight!"); return; }
-            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight)];
+            
+            // NEW: Push the 5th modifier variable into the array
+            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier)];
 
             if (editingIndex === -1) myRoutine.push(newExercise);
             else {
@@ -322,6 +346,7 @@
             document.getElementById("targetSets").value = "";
             document.getElementById("targetReps").value = "";
             document.getElementById("targetWeight").value = "";
+            document.getElementById("exerciseModifier").value = "0"; // Reset modifier
         }
 
         function deleteExercise(index) { myRoutine.splice(index, 1); renderRoutine(); }
@@ -334,6 +359,10 @@
             document.getElementById("targetSets").value = ex[1];
             document.getElementById("targetReps").value = ex[2];
             document.getElementById("targetWeight").value = ex[3];
+            
+            // Populate the modifier if it exists, otherwise default to 0
+            document.getElementById("exerciseModifier").value = ex.length > 4 ? ex[4] : "0";
+
             editingIndex = index;
             document.getElementById("formTitle").innerText = "Edit Exercise";
             document.getElementById("addUpdateBtn").innerText = "Update Exercise";
@@ -385,7 +414,9 @@
               delimitedString = routineName;
               for (let i = 0; i < myRoutine.length; i++) {
                   let ex = myRoutine[i]; 
-                  delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3];
+                  // NEW: Append the modifier (ex[4]) to the export string payload! 
+                  let mod = ex.length > 4 ? ex[4] : 0;
+                  delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3] + "|" + mod;
               }
             }
 
@@ -394,7 +425,7 @@
                 googleUrl: document.getElementById("googleUrlInput").value,
                 googlePwd: document.getElementById("googlePwdInput").value,
                 clearHistory: shouldClearHistory,
-                clearGoogle: shouldClearGoogle // Send the new flag back to the app
+                clearGoogle: shouldClearGoogle
             };
 
             var returnTo = getQueryParam('return_to', 'pebblejs://close#');
