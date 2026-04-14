@@ -307,9 +307,10 @@
                 let ex = myRoutine[i]; 
                 let modifier = ex.length > 4 ? parseInt(ex[4]) : 0; 
                 
-                // SAFETY CHECK 1: The Chain Breaker!
-                // If this is the second half of a superset, it CANNOT initiate another superset.
-                if (isSecondHalf && modifier === 2) {
+                // SAFETY CHECK 1: The Chain Breaker & Drop Set Catcher!
+                // If this is the second half of a superset, it CANNOT initiate another superset,
+                // and it CANNOT be a drop set. It must be a completely normal exercise block.
+                if (isSecondHalf && modifier !== 0) {
                     modifier = 0; 
                     ex[4] = 0; // Fix the underlying data automatically
                 }
@@ -417,7 +418,6 @@
         }
 
         function exportJSON() {
-            // SAFETY CHECK 2: Dangling Superset Catcher for Export
             if (myRoutine.length > 0) {
                 let lastEx = myRoutine[myRoutine.length - 1];
                 let lastMod = lastEx.length > 4 ? parseInt(lastEx[4]) : 0;
@@ -464,7 +464,6 @@
         }
 
         function saveAndSend() {
-            // SAFETY CHECK 2: Dangling Superset Catcher for Sending to Watch
             if (myRoutine.length > 0) {
                 let lastEx = myRoutine[myRoutine.length - 1];
                 let lastMod = lastEx.length > 4 ? parseInt(lastEx[4]) : 0;
