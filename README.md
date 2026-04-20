@@ -50,12 +50,12 @@ By default, every completed workout is saved to your phone's local storage.
 ## Screenshots
 
 ### Emery
-| Workout Execution | Rest Timer | Superset Grouping | Routine Editor | App Settings |
+| Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routine) | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
 | <img width="200" alt="1_Emery_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/8e0ba7f5-e8c6-4f05-983d-87344572b9fd" /> | <img width="200" alt="2_Emery_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/5df3bdf7-9a44-441b-a4b3-4d2d9c88ce69" /> | <img width="200" alt="3_Emery_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/bb86e32a-91e2-4caa-840c-5e8d0990b6ec" /> | <img width="200" alt="4_Emery_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/53086efd-9e6d-4f52-90ea-03d576a2a30b" /> | <img width="200" alt="5_Emery_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/f162c33a-bdef-4e03-b1c4-81c7ad09e826" /> |
 
 ### Diorite
-| Workout Execution | Rest Timer | Superset Grouping | Routine Editor | App Settings |
+| Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routine) | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
 | <img width="144" alt="1_Diorite_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/818f120c-0f22-46fc-9218-318e6d246bcf" /> | <img width="144" alt="2_Diorite_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/0741bbce-5359-4767-b3ea-ac2051105c80" /> | <img width="144" alt="3_Diorite_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/0598d477-6659-46db-bf5c-1ea3b98b7434" /> | <img width="144" alt="4_Diorite_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/4b04778d-d21d-4ee7-be02-04a92596256c" /> | <img width="144" alt="5_Diorite_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/d018d21f-490e-4a5b-9996-3b7511a13714" /> |
 
