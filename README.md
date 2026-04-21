@@ -50,22 +50,22 @@ By default, every completed workout is saved to your phone's local storage.
 ## Screenshots
 
 ### Emery
-| Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routines) | App Settings |
+| Workout Execution | Rest Timer | Routine Selector | Routine Selector | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
 | <img width="200" alt="1_Emery_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/8e0ba7f5-e8c6-4f05-983d-87344572b9fd" /> | <img width="200" alt="2_Emery_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/5df3bdf7-9a44-441b-a4b3-4d2d9c88ce69" /> | <img width="200" alt="3_Emery_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/bb86e32a-91e2-4caa-840c-5e8d0990b6ec" /> | <img width="200" alt="4_Emery_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/53086efd-9e6d-4f52-90ea-03d576a2a30b" /> | <img width="200" alt="5_Emery_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/f162c33a-bdef-4e03-b1c4-81c7ad09e826" /> |
 
 ### Diorite
-| Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routines) | App Settings |
+| Workout Execution | Rest Timer | Routine Selector | Routine Selector | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
 | <img width="144" alt="1_Diorite_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/818f120c-0f22-46fc-9218-318e6d246bcf" /> | <img width="144" alt="2_Diorite_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/0741bbce-5359-4767-b3ea-ac2051105c80" /> | <img width="144" alt="3_Diorite_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/0598d477-6659-46db-bf5c-1ea3b98b7434" /> | <img width="144" alt="4_Diorite_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/4b04778d-d21d-4ee7-be02-04a92596256c" /> | <img width="144" alt="5_Diorite_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/d018d21f-490e-4a5b-9996-3b7511a13714" /> |
 
 ### Gabbro
-| Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routines) | App Settings |
+| Workout Execution | Rest Timer | Routine Selector | Routine Selector | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
 | <img width="260" height="260" alt="1_Gabbro_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/bb6829d6-a5fa-4900-9c3c-6d7a85010da7" /> | <img width="260" height="260" alt="2_Gabbro_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/95fd1e74-87e2-4e0f-be38-ffe291450743" /> | <img width="260" height="260" alt="3_Gabbro_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/16840707-6f10-4b6c-b552-e9ff8a10ba34" /> | <img width="260" height="260" alt="4_Gabbro_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/83051461-95dd-4207-8937-7932d13f299e" /> | <img width="260" height="260" alt="5_Gabbro_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/2277a49d-b21f-4942-9266-58f4df737c7a" /> |
 
 ### Chalk
-| Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routines) | App Settings |
+| Workout Execution | Rest Timer | Routine Selector | Routine Selector | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
 | <img width="180" height="180" alt="1_Chalk_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/bd5c482a-2588-4956-a3c5-77d9dd793e3d" /> | <img width="180" height="180" alt="2_Chalk_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/5a38638a-7a60-44b9-b236-eacc1aa2e03e" /> | <img width="180" height="180" alt="3_Chalk_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/8eb73c9f-e4e4-4fe7-83f1-78d5d6022adf" /> | <img width="180" height="180" alt="4_Chalk_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/b41b80cd-2269-4b77-84da-7f57657686bb" /> | <img width="180" height="180" alt="5_Chalk_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/a4669477-e804-486e-b85f-ca1c6da22de0" /> |
 
