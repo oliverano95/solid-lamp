@@ -67,12 +67,7 @@ By default, every completed workout is saved to your phone's local storage.
 ### Chalk
 | Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routines) | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
-| <img width="180" height="180" alt="1_Chalk_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/bd5c482a-2588-4956-a3c5-77d9dd793e3d" />
-| <img width="180" height="180" alt="2_Chalk_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/5a38638a-7a60-44b9-b236-eacc1aa2e03e" />
-| <img width="180" height="180" alt="3_Chalk_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/8eb73c9f-e4e4-4fe7-83f1-78d5d6022adf" />
-| <img width="180" height="180" alt="4_Chalk_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/b41b80cd-2269-4b77-84da-7f57657686bb" />
-| <img width="180" height="180" alt="5_Chalk_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/a4669477-e804-486e-b85f-ca1c6da22de0" />
-|
+| <img width="180" height="180" alt="1_Chalk_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/bd5c482a-2588-4956-a3c5-77d9dd793e3d" /> | <img width="180" height="180" alt="2_Chalk_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/5a38638a-7a60-44b9-b236-eacc1aa2e03e" /> | <img width="180" height="180" alt="3_Chalk_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/8eb73c9f-e4e4-4fe7-83f1-78d5d6022adf" /> | <img width="180" height="180" alt="4_Chalk_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/b41b80cd-2269-4b77-84da-7f57657686bb" /> | <img width="180" height="180" alt="5_Chalk_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/a4669477-e804-486e-b85f-ca1c6da22de0" /> |
 
 ## ☁️ Advanced: Google Sheets Cloud Sync Setup
 
