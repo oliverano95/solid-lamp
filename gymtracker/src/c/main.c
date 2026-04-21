@@ -437,6 +437,7 @@ s_settings_menu_layer = menu_layer_create(GRect(0, 40, bounds.size.w, bounds.siz
 static void settings_window_unload(Window *window) {
   text_layer_destroy(s_settings_header_text);
   layer_destroy(s_settings_header_bg);
+  menu_layer_destroy(s_settings_menu_layer);
   menu_layer_set_highlight_colors(s_menu_layer, get_theme_color(), GColorWhite);
 }
 
@@ -1175,7 +1176,7 @@ static void wo_click_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, wo_up_click);
   window_single_click_subscribe(BUTTON_ID_DOWN, wo_down_click);
   window_single_click_subscribe(BUTTON_ID_SELECT, wo_select_short_click);
-  window_multi_click_subscribe(BUTTON_ID_SELECT, 2, 0, 0, true, wo_select_double_click); 
+  window_multi_click_subscribe(BUTTON_ID_SELECT, 2, 2, 300, true, wo_select_double_click); 
   window_long_click_subscribe(BUTTON_ID_SELECT, s_long_press_ms, wo_select_long_click, NULL); 
   window_single_click_subscribe(BUTTON_ID_BACK, wo_back_click);
 }
@@ -1469,7 +1470,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   Tuple *routine_data_tuple = dict_find(iterator, MESSAGE_KEY_ROUTINE_DATA);
   if (routine_data_tuple && routine_data_tuple->type == TUPLE_CSTRING) {
     char *delimited_string = routine_data_tuple->value->cstring;
-    char safe_buffer[256]; 
+    static char safe_buffer[256]; 
     snprintf(safe_buffer, sizeof(safe_buffer), "%s", delimited_string);
     
     // 1. Extract just the routine name from the incoming string
@@ -1582,15 +1583,16 @@ static void deinit() {
       persist_write_data(ACTIVE_EX_BASE + j, &s_exercises[j], sizeof(Exercise));
     }
   }
-  if (s_summary_window) window_destroy(s_summary_window);
-  if (s_workout_window) window_destroy(s_workout_window);
-  if (s_confirm_window) window_destroy(s_confirm_window);
-  if (s_help_window) window_destroy(s_help_window);
-  if (s_settings_window) window_destroy(s_settings_window);
-  if (s_variation_window) window_destroy(s_variation_window);
-  if (s_exit_window) window_destroy(s_exit_window); // NEW
+  if (s_summary_window) { window_destroy(s_summary_window); s_summary_window = NULL; }
+  if (s_workout_window) { window_destroy(s_workout_window); s_workout_window = NULL; }
+  if (s_confirm_window) { window_destroy(s_confirm_window); s_confirm_window = NULL; }
+  if (s_help_window) { window_destroy(s_help_window); s_help_window = NULL; }
+  if (s_settings_window) { window_destroy(s_settings_window); s_settings_window = NULL; }
+  if (s_variation_window) { window_destroy(s_variation_window); s_variation_window = NULL; }
+  if (s_exit_window) { window_destroy(s_exit_window); s_exit_window = NULL; }
   
   window_destroy(s_main_window); 
+  s_main_window = NULL;
 }
 
 int main(void) {
