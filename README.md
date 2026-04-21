@@ -62,8 +62,7 @@ By default, every completed workout is saved to your phone's local storage.
 ### Gabbro
 | Workout Execution | Rest Timer | Routine Selector (one routine) | Routine Selector (three routines) | App Settings |
 | :---: | :---: | :---: | :---: | :---: |
-| <img width="260" height="260" alt="1_Gabbro_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/bb6829d6-a5fa-4900-9c3c-6d7a85010da7" /> | <img width="260" height="260" alt="2_Gabbro_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/95fd1e74-87e2-4e0f-be38-ffe291450743" /> | <img width="260" height="260" alt="3_Gabbro_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/16840707-6f10-4b6c-b552-e9ff8a10ba34" /> |<img width="260" height="260" alt="4_Gabbro_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/83051461-95dd-4207-8937-7932d13f299e" />
-| <img width="260" height="260" alt="5_Gabbro_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/2277a49d-b21f-4942-9266-58f4df737c7a" /> |
+| <img width="260" height="260" alt="1_Gabbro_GymTracker_ExerciseWindow" src="https://github.com/user-attachments/assets/bb6829d6-a5fa-4900-9c3c-6d7a85010da7" /> | <img width="260" height="260" alt="2_Gabbro_GymTracker_RestWindow" src="https://github.com/user-attachments/assets/95fd1e74-87e2-4e0f-be38-ffe291450743" /> | <img width="260" height="260" alt="3_Gabbro_GymTracker_RoutineWindow2" src="https://github.com/user-attachments/assets/16840707-6f10-4b6c-b552-e9ff8a10ba34" /> | <img width="260" height="260" alt="4_Gabbro_GymTracker_RoutineWindow" src="https://github.com/user-attachments/assets/83051461-95dd-4207-8937-7932d13f299e" /> | <img width="260" height="260" alt="5_Gabbro_GymTracker_SettingsWindow" src="https://github.com/user-attachments/assets/2277a49d-b21f-4942-9266-58f4df737c7a" /> |
 
 ## ☁️ Advanced: Google Sheets Cloud Sync Setup
 
