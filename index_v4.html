@@ -286,26 +286,51 @@
 
         function downloadCSV() {
             if (workoutHistory.length === 0) { alert("No history to download!"); return; }
-            let csvContent = "Date,Routine,Duration (s),Exercise,Set,Reps,Weight\n";
+            
+            // V4.0 UPDATE: Added new columns to the CSV header
+            let csvContent = "Date,Routine,Duration (s),Mood,Accuracy (%),Density,Peak HR,Avg HR,Exercise,Set,Reps,Weight\n";
+            
             workoutHistory.forEach(entry => {
                 const parts = entry.data.split('|');
                 const routine = parts[0] || "Unknown";
                 const date = parts[1] || "";
                 const duration = parts[2] || "0";
+                
+                // BACKWARD COMPATIBILITY CHECK
+                // Fallback empty values for old V3.0 workouts
+                let mood = "", accuracy = "", density = "", peakHR = "", avgHR = "";
+                let startIndex = 3; 
+                
+                // If parts[3] is a number (Mood Score) and not text (Exercise Name), it's a V4.0 workout!
+                if (parts.length > 8 && !isNaN(parts[3])) {
+                    mood = parts[3];
+                    accuracy = parts[4];
+                    density = parts[5];
+                    peakHR = parts[6];
+                    avgHR = parts[7];
+                    startIndex = 8; // Shift the starting index for the exercise loop
+                }
+                
                 let currentExercise = "";
                 let setNum = 1;
                 
-                for (let i = 3; i < parts.length; i++) {
-                    if (isNaN(parts[i])) { currentExercise = parts[i]; setNum = 1; } 
-                    else {
+                for (let i = startIndex; i < parts.length; i++) {
+                    if (isNaN(parts[i])) { 
+                        currentExercise = parts[i]; 
+                        setNum = 1; 
+                    } else {
                         let reps = parts[i];
                         let weight = parts[i+1];
-                        csvContent += `${date},${routine},${duration},${currentExercise},${setNum},${reps},${weight}\n`;
+                        
+                        // V4.0 UPDATE: Inject the global metrics into the row string
+                        csvContent += `${date},${routine},${duration},${mood},${accuracy},${density},${peakHR},${avgHR},${currentExercise},${setNum},${reps},${weight}\n`;
+                        
                         setNum++;
                         i++; 
                     }
                 }
             });
+            
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
