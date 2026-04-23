@@ -223,7 +223,7 @@ static void refresh_directory() {
   s_active_slots = 0;
   
   // OPTIMIZATION: Moving large arrays to static to prevent Stack Overflows
-  static char temp_data[256]; 
+  static char temp_data[512]; 
 
   for(int i = 0; i < MAX_SLOTS; i++) {
     if(persist_exists(STORAGE_KEY_BASE + i)) {
@@ -1470,7 +1470,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   Tuple *routine_data_tuple = dict_find(iterator, MESSAGE_KEY_ROUTINE_DATA);
   if (routine_data_tuple && routine_data_tuple->type == TUPLE_CSTRING) {
     char *delimited_string = routine_data_tuple->value->cstring;
-    static char safe_buffer[256]; 
+    static char safe_buffer[512]; 
     snprintf(safe_buffer, sizeof(safe_buffer), "%s", delimited_string);
     
     // 1. Extract just the routine name from the incoming string
