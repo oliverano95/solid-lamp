@@ -8,7 +8,7 @@
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; max-width: 400px; margin: 0 auto; }
         .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input, select, button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        input, select, button, textarea { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #FF4700; color: white; font-weight: bold; border: none; cursor: pointer; }
         button:hover { background-color: #e64000; }
         
@@ -20,19 +20,23 @@
         .exercise-item:active { cursor: grabbing; }
         .exercise-item.drag-over { border-top: 3px solid #FF4700; background: #e2e2e2; }
         
-        .small-btn { width: auto; padding: 5px 8px; margin: 0 0 0 5px; font-size: 12px; display: inline-block; }
+        .small-btn { width: auto; padding: 6px 10px; margin: 0; font-size: 12px; }
         .delete-btn { background-color: #dc3545; }
         .delete-btn:hover { background-color: #c82333; }
         
-        .grab-handle { color: #999; margin-right: 10px; font-size: 18px; user-select: none; }
-        .exercise-info { flex-grow: 1; }
+        /* V4.0 UI FIXES */
+        .btn-group { display: flex; flex-wrap: nowrap; gap: 4px; flex-shrink: 0; }
+        .exercise-info { display: flex; align-items: flex-start; flex-grow: 1; min-width: 0; padding-right: 10px; }
+        .exercise-details { flex-grow: 1; min-width: 0; }
+        .grab-handle { color: #999; margin-right: 10px; font-size: 18px; user-select: none; margin-top: -2px; }
+        .exercise-info strong { word-wrap: break-word; }
         
         .history-item { font-size: 12px; padding: 8px; border-bottom: 1px solid #eee; }
         .history-item:last-child { border-bottom: none; }
 
         #exerciseSearch { border: 2px solid #FF4700; background-color: #fffaf5; }
         
-        .mod-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; margin-left: 5px; color: white; vertical-align: middle;}
+        .mod-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; margin-left: 5px; color: white; display: inline-block; white-space: nowrap; vertical-align: middle; margin-bottom: 2px; }
         .badge-drop { background-color: #e83e8c; }
         .badge-super { background-color: #007bff; }
         .badge-super-2 { background-color: #17a2b8; } 
@@ -63,12 +67,25 @@
     </div>
 
     <div class="card">
-        <h3>Manage Routine Files</h3>
+        <h3 style="margin-top: 0;">Manage Routine Files</h3>
         <div class="flex-row">
-            <button class="secondary-btn" onclick="document.getElementById('importFile').click()">Load Routine</button>
-            <button class="secondary-btn" onclick="exportJSON()">Save to File</button>
+            <button class="secondary-btn" onclick="document.getElementById('importFile').click()">Load (File)</button>
+            <button class="secondary-btn" onclick="exportJSON()">Save (File)</button>
         </div>
         <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importJSON(event)">
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+        
+        <h4 style="margin-top: 0;">Mobile Import / Export</h4>
+        <p style="font-size: 12px; color: gray; margin-top: 0;">If you are inside the Pebble app, use this text box to copy and paste routines instead of using files.</p>
+        
+        <textarea id="routineTextArea" rows="3" style="font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"n":"My Routine","e":[...]}'></textarea>
+        
+        <div class="flex-row">
+            <button type="button" class="small-btn secondary-btn" style="margin: 0; flex: 1;" onclick="exportToText()">1. Generate Text</button>
+            <button type="button" class="small-btn secondary-btn" style="margin: 0; flex: 1;" onclick="copyText()">2. Copy Text</button>
+        </div>
+        <button type="button" class="small-btn" style="margin: 10px 0 0 0; width: 100%; background-color: #28a745;" onclick="importFromText()">⬇️ Import Pasted Text</button>
     </div>
 
     <div class="card">
@@ -103,7 +120,7 @@
 
     <div class="card">
         <h3>Your Routine:</h3>
-        <p style="font-size: 11px; color: gray; margin-top: 0;">Drag and drop items to reorder them.</p>
+        <p style="font-size: 11px; color: gray; margin-top: 0;">Drag and drop items to reorder them, or use the arrows on mobile.</p>
         <div id="routineList">
             <p id="emptyMessage" style="color: gray; font-size: 12px;">No exercises added yet.</p>
         </div>
@@ -350,6 +367,67 @@
             }
         }
 
+        // --- V4.0 CLIPBOARD BYPASS LOGIC ---
+        function exportToText() {
+            let currentName = document.getElementById("routineName").value || "My Routine";
+            let exportData = {
+                "n": currentName,
+                "e": myRoutine 
+            };
+            document.getElementById("routineTextArea").value = JSON.stringify(exportData);
+        }
+
+        function copyText() {
+            let textArea = document.getElementById("routineTextArea");
+            if (!textArea.value) {
+                alert("Please click 'Generate Text' first!");
+                return;
+            }
+            textArea.select();
+            textArea.setSelectionRange(0, 99999);
+            try {
+                document.execCommand("copy");
+                alert("✅ Routine copied to clipboard! You can now paste this into your Notes app or email.");
+            } catch (err) {
+                alert("⚠️ Unable to auto-copy. Please manually highlight the text in the box and copy it.");
+            }
+        }
+
+        function importFromText() {
+            let rawText = document.getElementById("routineTextArea").value.trim();
+            if (!rawText) {
+                alert("Please paste a routine string into the box first.");
+                return;
+            }
+            try {
+                let importedData = JSON.parse(rawText);
+                if (importedData.n !== undefined && Array.isArray(importedData.e)) {
+                    document.getElementById("routineName").value = importedData.n;
+                    myRoutine = importedData.e.map(ex => {
+                        if (ex.length === 4) ex.push(0); // V3.0 backward compatibility
+                        return ex;
+                    });
+                    renderRoutine(); 
+                    alert("✅ Routine imported successfully!");
+                    document.getElementById("routineTextArea").value = ""; 
+                } else {
+                    alert("⚠️ The pasted text doesn't look like a valid GymTracker routine.");
+                }
+            } catch (e) {
+                alert("⚠️ Invalid text. Please make sure you copied the entire string, including the {} brackets.");
+            }
+        }
+
+        // --- V4.0 MANUAL MOVE LOGIC (For Mobile Touch) ---
+        function moveExercise(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= myRoutine.length) return;
+            const temp = myRoutine[index];
+            myRoutine[index] = myRoutine[newIndex];
+            myRoutine[newIndex] = temp;
+            renderRoutine();
+        }
+
         function renderRoutine() {
             const listDiv = document.getElementById("routineList");
             listDiv.innerHTML = ""; 
@@ -395,16 +473,32 @@
                 let info = document.createElement("div");
                 info.className = "exercise-info";
                 
-                let handle = `<span class="grab-handle">≡</span>`;
-                if (isSecondHalf) handle = `<span class="grab-handle" style="color:#007bff; margin-left:8px;">↳</span>`;
+                // V4.0 UI FIX: Changed spans to divs to respect the Flexbox column layout
+                let handle = `<div class="grab-handle">≡</div>`;
+                if (isSecondHalf) handle = `<div class="grab-handle" style="color:#007bff; margin-left:8px;">↳</div>`;
                 
-                info.innerHTML = `${handle}<strong>${ex[0]}</strong> ${badgeHTML}<br><span style="margin-left: 28px;">${ex[1]}s x ${ex[2]}r @ ${ex[3]}kg</span>`;
+                info.innerHTML = `
+                    ${handle}
+                    <div class="exercise-details">
+                        <div style="line-height: 1.2; margin-bottom: 4px;"><strong>${ex[0]}</strong> ${badgeHTML}</div>
+                        <div>${ex[1]}s x ${ex[2]}r @ ${ex[3]}kg</div>
+                    </div>
+                `;
                 
                 let btnGroup = document.createElement("div");
+                btnGroup.className = "btn-group"; // <-- THIS LOCKS THEM IN A SINGLE ROW!
+                
+                // Determine if Up/Down buttons should be disabled
+                let upDisabled = (i === 0) ? "disabled style='opacity: 0.3;'" : "";
+                let downDisabled = (i === myRoutine.length - 1) ? "disabled style='opacity: 0.3;'" : "";
+
                 btnGroup.innerHTML = `
+                    <button class="small-btn secondary-btn" onclick="moveExercise(${i}, -1)" ${upDisabled}>▲</button>
+                    <button class="small-btn secondary-btn" onclick="moveExercise(${i}, 1)" ${downDisabled}>▼</button>
                     <button class="small-btn secondary-btn" onclick="editExercise(${i})">Edit</button>
                     <button class="small-btn delete-btn" onclick="deleteExercise(${i})">X</button>
                 `;
+                
                 div.appendChild(info);
                 div.appendChild(btnGroup);
                 listDiv.appendChild(div);
