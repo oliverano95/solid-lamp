@@ -548,6 +548,11 @@
               }
             }
 
+            if (delimitedString.length > 255) {
+                alert("⚠️ Routine Too Long!\n\nYour routine is " + delimitedString.length + " characters, but the watch can only store 255. \n\nPlease abbreviate some exercise names (e.g. 'DB Bench' instead of 'Dumbbell Bench Press') and try again.");
+                return; // Stop the function instantly so it doesn't send!
+            }
+
             const configData = {
                 routineData: delimitedString,
                 progressionMode: document.getElementById("progressionMode").value,
