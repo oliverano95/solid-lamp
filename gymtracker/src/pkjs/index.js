@@ -1,5 +1,7 @@
 // src/pkjs/index.js
 
+var isDevMode = false;
+
 // 1. Tell us when the JS environment is ready
 Pebble.addEventListener('ready', function(e) {
   console.log('PebbleKit JS is ready and running on the phone!');
@@ -8,7 +10,8 @@ Pebble.addEventListener('ready', function(e) {
 // 2. Open the configuration web page when the user clicks "Settings"
 Pebble.addEventListener('showConfiguration', function(e) {
   // Your live GitHub Pages link
-  var myConfigUrl = 'https://oliverano95.github.io/GymTracker/';
+  var myConfigUrl = isDevMode ? 'https://oliverano95.github.io/GymTracker/index_v4.html' : 'https://oliverano95.github.io/GymTracker/';
+  //var myConfigUrl = 'https://oliverano95.github.io/GymTracker/';
   
   // Retrieve saved settings and workout history from the phone's local memory
   var googleUrl = localStorage.getItem('googleUrl') || '';
