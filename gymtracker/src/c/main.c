@@ -1202,16 +1202,23 @@ static void skip_exercise() {
   if (s_is_resting) return;
   if (s_curr_ex_idx + 1 >= s_total_exercises) return;
 
+  // Do not allow skipping if the exercise is part of a Superset to prevent breaking the chain!
+  if (s_exercises[s_curr_ex_idx].modifier == 2 || (s_curr_ex_idx > 0 && s_exercises[s_curr_ex_idx - 1].modifier == 2)) {
+      return; 
+  }
+
   Exercise temp = s_exercises[s_curr_ex_idx];
   int next_idx = s_curr_ex_idx + 1;
-
   s_exercises[s_curr_ex_idx] = s_exercises[next_idx];
   s_exercises[next_idx] = temp;
 
-  if (s_exercises[s_curr_ex_idx].modifier == 2) {
-    s_exercises[s_curr_ex_idx].current_set = s_exercises[next_idx].current_set;
+  // Update the temp variables so the screen shows the correct reps/weight for the new exercise!
+  int active_weight = new_ex->target_weight;
+  if (new_ex->modifier == 1 && (new_ex->current_set % 2 == 0)) {
+      active_weight = (active_weight * (100 - s_drop_set_pct)) / 100;
   }
-
+  s_temp_weight = active_weight;
+  
   update_workout_ui(true);
 }
 
