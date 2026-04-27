@@ -1213,6 +1213,9 @@ static void skip_exercise() {
   s_exercises[next_idx] = temp;
 
   // Update the temp variables so the screen shows the correct reps/weight for the new exercise!
+  Exercise *new_ex = &s_exercises[s_curr_ex_idx]; 
+  s_temp_reps = new_ex->target_reps;
+  
   int active_weight = new_ex->target_weight;
   if (new_ex->modifier == 1 && (new_ex->current_set % 2 == 0)) {
       active_weight = (active_weight * (100 - s_drop_set_pct)) / 100;
