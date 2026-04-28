@@ -120,7 +120,10 @@
             <div id="modifierDesc" class="modifier-desc">
                 Standard exercise execution with regular rest periods.
             </div>
-            
+
+			<label style="font-size: 14px; font-weight: bold; margin-top: 5px; display: block;">Optional Note:</label>
+			<input type="text" id="exerciseComment" placeholder="e.g., Seat at 4, Pin at 3" maxlength="18">
+			
             <button id="addUpdateBtn" onclick="addExercise()">+ Add to Routine</button>
         </div>
 
@@ -535,6 +538,8 @@
                 
                 let handle = `<div class="grab-handle">≡</div>`;
                 if (isSecondHalf) handle = `<div class="grab-handle" style="color:#007bff; margin-left:8px;">↳</div>`;
+
+				let commentHTML = (ex.length > 5 && ex[5] !== "") ? `<div style="font-size: 11px; color: #888; margin-top: 2px;">📝 ${ex[5]}</div>` : "";
                 
                 info.innerHTML = `
                     ${handle}
@@ -584,10 +589,11 @@
             const reps = document.getElementById("targetReps").value;
             const weight = document.getElementById("targetWeight").value;
             const modifier = document.getElementById("exerciseModifier").value;
+			const comment = document.getElementById("exerciseComment").value.trim();
 
             if(sets === "" || reps === "" || weight === "") { alert("Please fill out sets, reps, and weight!"); return; }
             
-            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier)];
+            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier), comment];
 
             if (editingIndex === -1) myRoutine.push(newExercise);
             else {
@@ -603,6 +609,7 @@
             document.getElementById("targetReps").value = "";
             document.getElementById("targetWeight").value = "";
             document.getElementById("exerciseModifier").value = "0"; 
+			document.getElementById("exerciseComment").value = "";
             updateModifierDesc(); 
         }
 
@@ -616,8 +623,8 @@
             document.getElementById("targetSets").value = ex[1];
             document.getElementById("targetReps").value = ex[2];
             document.getElementById("targetWeight").value = ex[3];
-            
             document.getElementById("exerciseModifier").value = ex.length > 4 ? ex[4] : "0";
+			document.getElementById("exerciseComment").value = ex.length > 5 ? ex[5] : "";
             updateModifierDesc(); 
 
             editingIndex = index;
@@ -699,7 +706,10 @@
               for (let i = 0; i < myRoutine.length; i++) {
                   let ex = myRoutine[i]; 
                   let mod = ex.length > 4 ? ex[4] : 0;
-                  delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3] + "|" + mod;
+                  let cmt = (ex.length > 5 && ex[5].trim() !== "") ? ex[5].trim() : "-"; // Safety dash
+                  
+                  // Added the comment to the Bluetooth payload!
+                  delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3] + "|" + mod + "|" + cmt;
               }
             }
 
