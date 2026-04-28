@@ -86,7 +86,8 @@
                 <label style="font-size: 12px; font-weight: bold; color: #004085;">📥 Watch Auto-Progression Sync:</label>
                 <div class="flex-row" style="margin-top: 5px;">
                     <select id="syncSelect" style="margin: 0;"></select>
-                    <button type="button" class="small-btn" style="background-color: #007bff; margin: 0; white-space: nowrap;" onclick="loadSyncedRoutine()">Load Targets</button>
+                    <button type="button" class="small-btn" style="background-color: #007bff; margin: 0; white-space: nowrap;" onclick="loadSyncedRoutine()">Load</button>
+                    <button type="button" class="small-btn delete-btn" style="margin: 0; white-space: nowrap;" onclick="deleteSyncedRoutine()">Delete</button>
                 </div>
                 <p style="font-size: 10px; margin: 5px 0 0 0; color: #004085;">Loads updated targets from your last completed watch workout.</p>
             </div>
@@ -790,7 +791,8 @@
                 googleUrl: document.getElementById("googleUrlInput").value,
                 googlePwd: document.getElementById("googlePwdInput").value,
                 clearHistory: shouldClearHistory,
-                clearGoogle: shouldClearGoogle
+                clearGoogle: shouldClearGoogle,
+				updatedSync: syncedRoutinesDict
             };
 
             var returnTo = getQueryParam('return_to', 'pebblejs://close#');
@@ -838,6 +840,26 @@
             // Switch back to the Builder tab so they can see the loaded routine
             document.querySelector('.tab-btn[onclick*="tab-builder"]').click();
             alert("✅ Auto-Progressed routine targets successfully loaded from watch!");
+        }
+
+		function deleteSyncedRoutine() {
+            const syncDropdown = document.getElementById("syncSelect");
+            if (syncDropdown.options.length === 0) return;
+            
+            const selectedName = syncDropdown.value;
+            if (confirm("Remove '" + selectedName + "' from your synced auto-progression list?")) {
+                
+                // 1. Remove it from our local dictionary
+                delete syncedRoutinesDict[selectedName];
+                
+                // 2. Remove it from the visual dropdown
+                syncDropdown.remove(syncDropdown.selectedIndex);
+                
+                // 3. Hide the whole box if that was the last one!
+                if (syncDropdown.options.length === 0) {
+                    document.getElementById('syncContainer').style.display = 'none';
+                }
+            }
         }
 
     </script>
