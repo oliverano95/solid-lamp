@@ -81,6 +81,16 @@
             <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
             
             <h4 style="margin-top: 0;">Mobile Import / Export</h4>
+
+			<div id="syncContainer" style="display: none; background: #e8f4f8; padding: 10px; border: 1px solid #b8daff; border-radius: 4px; margin-bottom: 15px;">
+                <label style="font-size: 12px; font-weight: bold; color: #004085;">📥 Watch Auto-Progression Sync:</label>
+                <div class="flex-row" style="margin-top: 5px;">
+                    <select id="syncSelect" style="margin: 0;"></select>
+                    <button type="button" class="small-btn" style="background-color: #007bff; margin: 0; white-space: nowrap;" onclick="loadSyncedRoutine()">Load Targets</button>
+                </div>
+                <p style="font-size: 10px; margin: 5px 0 0 0; color: #004085;">Loads updated targets from your last completed watch workout.</p>
+            </div>
+			
             <p style="font-size: 12px; color: gray; margin-top: 0;">If you are inside the Pebble app, use this text box to copy and paste routines instead of using files.</p>
             
             <textarea id="routineTextArea" rows="3" style="font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"n":"My Routine","e":[...]}'></textarea>
@@ -353,15 +363,33 @@
         window.onload = function() {
             renderExerciseDropdown();
             updateModifierDesc(); 
-			updateProgressionUI();
+            updateProgressionUI();
             
             const storedUrl = getQueryParam('googleUrl', '');
             if (storedUrl && storedUrl.trim() !== '') {
                 document.getElementById('googleStatusContainer').style.display = 'block';
             }
+            
             const historyStr = getQueryParam('history', '[]');
             try { workoutHistory = JSON.parse(historyStr); } catch(e) { workoutHistory = []; }
             renderHistory();
+
+            // V5.0 TWO-WAY SYNC INIT
+            const syncStr = getQueryParam('sync', '{}');
+            try { 
+                syncedRoutinesDict = JSON.parse(syncStr); 
+                const syncKeys = Object.keys(syncedRoutinesDict);
+                if (syncKeys.length > 0) {
+                    document.getElementById('syncContainer').style.display = 'block';
+                    const syncDropdown = document.getElementById("syncSelect");
+                    syncKeys.forEach(key => {
+                        const opt = document.createElement("option");
+                        opt.value = key;
+                        opt.text = key;
+                        syncDropdown.appendChild(opt);
+                    });
+                }
+            } catch(e) {}
         };
 
         function flagClearGoogle() {
@@ -768,6 +796,35 @@
             var returnTo = getQueryParam('return_to', 'pebblejs://close#');
             window.location.href = returnTo + encodeURIComponent(JSON.stringify(configData));
         }
+
+		let syncedRoutinesDict = {};
+
+        function loadSyncedRoutine() {
+            const selectedName = document.getElementById("syncSelect").value;
+            const syncString = syncedRoutinesDict[selectedName];
+            if (!syncString) return;
+
+            const parts = syncString.split('|');
+            document.getElementById("routineName").value = parts[0];
+            myRoutine = [];
+            
+            // Loop through the delimited string (6 fields per exercise)
+            for (let i = 1; i < parts.length; i += 6) {
+                if(parts[i]) {
+                    let name = parts[i];
+                    let sets = parseInt(parts[i+1]);
+                    let reps = parseInt(parts[i+2]);
+                    let weight = parseInt(parts[i+3]);
+                    let mod = parseInt(parts[i+4]);
+                    let comment = parts[i+5] === "-" ? "" : parts[i+5];
+                    
+                    myRoutine.push([name, sets, reps, weight, mod, comment]);
+                }
+            }
+            renderRoutine();
+            alert("✅ Auto-Progressed routine targets successfully loaded from watch!");
+        }
+
     </script>
 </body>
 </html>
