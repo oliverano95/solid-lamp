@@ -806,10 +806,22 @@
 
             const parts = syncString.split('|');
             document.getElementById("routineName").value = parts[0];
+            
+            let startIndex = 1;
+            
+            // V5.0 UX FIX: Check if the string contains the new Progression Settings
+            // (If the second item is -1, 0, or 1, we know it's the Progression Mode!)
+            if (parts[1] === "-1" || parts[1] === "0" || parts[1] === "1") {
+                document.getElementById("progressionMode").value = parts[1];
+                document.getElementById("weightIncrement").value = parts[2];
+                updateProgressionUI(); // Update the green/blue info box automatically
+                startIndex = 3; // Shift the loop start index past the new data
+            }
+
             myRoutine = [];
             
             // Loop through the delimited string (6 fields per exercise)
-            for (let i = 1; i < parts.length; i += 6) {
+            for (let i = startIndex; i < parts.length; i += 6) {
                 if(parts[i]) {
                     let name = parts[i];
                     let sets = parseInt(parts[i+1]);
@@ -822,6 +834,9 @@
                 }
             }
             renderRoutine();
+            
+            // Switch back to the Builder tab so they can see the loaded routine
+            document.querySelector('.tab-btn[onclick*="tab-builder"]').click();
             alert("✅ Auto-Progressed routine targets successfully loaded from watch!");
         }
 
