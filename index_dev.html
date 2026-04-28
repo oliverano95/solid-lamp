@@ -288,6 +288,23 @@
                 desc.innerHTML = "<strong>Bodyweight:</strong> Disables weight tracking on the watch so you can focus entirely on your reps.";
                 desc.style.borderLeftColor = "#28a745"; // Green
             }
+			const weightInput = document.getElementById("targetWeight");
+            
+            if (val === "4") {
+                desc.innerHTML = "<strong>Bodyweight:</strong> Disables weight tracking on the watch so you can focus entirely on your reps.";
+                desc.style.borderLeftColor = "#28a745"; // Green
+                
+                // UX FIX: Grey out the weight input
+                weightInput.disabled = true;
+                weightInput.value = "";
+                weightInput.placeholder = "Bodyweight (No weight needed)";
+                weightInput.style.backgroundColor = "#e9ecef";
+            } else {
+                // Restore the input for all other modifiers
+                weightInput.disabled = false;
+                weightInput.placeholder = "Target Weight in kg (e.g., 60)";
+                weightInput.style.backgroundColor = "";
+            }
         }
 
         function renderExerciseDropdown(filterText = "") {
@@ -591,6 +608,8 @@
             const modifier = document.getElementById("exerciseModifier").value;
 			const comment = document.getElementById("exerciseComment").value.trim();
 
+			if (modifier === "4") weight = "0";
+
             if(sets === "" || reps === "" || weight === "") { alert("Please fill out sets, reps, and weight!"); return; }
             
             const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier), comment];
@@ -632,8 +651,10 @@
             document.getElementById("addUpdateBtn").innerText = "Update Exercise";
             
             // Switch back to Builder tab to show the edit form
-            document.querySelector('.tab-btn[onclick*="tab-builder"]').click();
-            window.scrollTo(0, 0);
+        	document.querySelector('.tab-btn[onclick*="tab-builder"]').click();
+        
+        	// V5.0 UX FIX: Smooth scroll directly to the input form!
+        	document.getElementById("formTitle").scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function exportJSON() {
