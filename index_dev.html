@@ -604,13 +604,24 @@
             const name = document.getElementById("exerciseSelect").value;
             const sets = document.getElementById("targetSets").value;
             const reps = document.getElementById("targetReps").value;
-            const weight = document.getElementById("targetWeight").value;
+            
+            // UX FIX 1: Changed 'const' to 'let' so we can dynamically overwrite it!
+            let weight = document.getElementById("targetWeight").value;
             const modifier = document.getElementById("exerciseModifier").value;
-			const comment = document.getElementById("exerciseComment").value.trim();
+            
+            // Safely grab the comment if the field exists
+            const commentField = document.getElementById("exerciseComment");
+            const comment = commentField ? commentField.value.trim() : "";
 
-			if (modifier === "4") weight = "0";
+            // UX FIX 2: Automatically set weight to "0" to bypass validation for Bodyweight
+            if (modifier === "4") {
+                weight = "0";
+            }
 
-            if(sets === "" || reps === "" || weight === "") { alert("Please fill out sets, reps, and weight!"); return; }
+            if(sets === "" || reps === "" || weight === "") { 
+                alert("Please fill out sets, reps, and weight!"); 
+                return; 
+            }
             
             const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier), comment];
 
@@ -621,14 +632,19 @@
                 document.getElementById("formTitle").innerText = "Add Exercise";
                 document.getElementById("addUpdateBtn").innerText = "+ Add to Routine";
             }
+            
             renderRoutine(); 
+            
+            // Reset the form fields
             document.getElementById("exerciseSearch").value = "";
             renderExerciseDropdown();
             document.getElementById("targetSets").value = "";
             document.getElementById("targetReps").value = "";
             document.getElementById("targetWeight").value = "";
             document.getElementById("exerciseModifier").value = "0"; 
-			document.getElementById("exerciseComment").value = "";
+            if (commentField) commentField.value = "";
+            
+            // Reset the description and re-enable the weight box
             updateModifierDesc(); 
         }
 
