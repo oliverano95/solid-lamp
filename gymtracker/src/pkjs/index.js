@@ -1,6 +1,6 @@
 // src/pkjs/index.js
 
-var isDevMode = false;
+var isDevMode = true;
 
 // 1. Tell us when the JS environment is ready
 Pebble.addEventListener('ready', function(e) {
@@ -10,18 +10,21 @@ Pebble.addEventListener('ready', function(e) {
 // 2. Open the configuration web page when the user clicks "Settings"
 Pebble.addEventListener('showConfiguration', function(e) {
   // Your live GitHub Pages link
-  var myConfigUrl = isDevMode ? 'https://oliverano95.github.io/GymTracker/index_v4.html' : 'https://oliverano95.github.io/GymTracker/';
-  //var myConfigUrl = 'https://oliverano95.github.io/GymTracker/';
-  
+  var myConfigUrl = isDevMode ? 'https://oliverano95.github.io/GymTracker/index_dev.html' : 'https://oliverano95.github.io/GymTracker/';
+    
   // Retrieve saved settings and workout history from the phone's local memory
   var googleUrl = localStorage.getItem('googleUrl') || '';
   var googlePwd = localStorage.getItem('googlePwd') || '';
   var history = localStorage.getItem('workoutHistory') || '[]';
+  
+  // V5.0 NEW: Retrieve the synced routines for Two-Way Sync
+  var syncedRoutines = localStorage.getItem('synced_routines') || '{}';
 
   // Safely pass this data to the webpage via URL parameters
   var url = myConfigUrl + '?googleUrl=' + encodeURIComponent(googleUrl) + 
             '&googlePwd=' + encodeURIComponent(googlePwd) + 
-            '&history=' + encodeURIComponent(history);
+            '&history=' + encodeURIComponent(history) +
+            '&sync=' + encodeURIComponent(syncedRoutines);
             
   Pebble.openURL(url);
 });
@@ -48,6 +51,11 @@ Pebble.addEventListener('webviewclosed', function(e) {
     
     if (configData.clearHistory) {
       localStorage.setItem('workoutHistory', '[]');
+    }
+
+    // V5.0 NEW: Catch the updated synced routines dictionary and save it to the phone!
+    if (configData.updatedSync !== undefined) {
+      localStorage.setItem('synced_routines', JSON.stringify(configData.updatedSync));
     }
 
     // NEW: Build a combined data package to send to the watch
@@ -122,5 +130,17 @@ Pebble.addEventListener('appmessage', function(e) {
       // Send the secured envelope
       req.send(JSON.stringify(payload));
     }
+  }
+  
+  // V5.0 TWO-WAY SYNC INTERCEPTOR
+  if (e.payload.ROUTINE_DATA) {
+      var syncString = e.payload.ROUTINE_DATA;
+      var routineName = syncString.split('|')[0];
+
+      // Save it permanently to the phone's local storage
+      var syncedRoutines = JSON.parse(localStorage.getItem('synced_routines') || '{}');
+      syncedRoutines[routineName] = syncString;
+      localStorage.setItem('synced_routines', JSON.stringify(syncedRoutines));
+      console.log("Two-Way Sync Saved for: " + routineName);
   }
 });

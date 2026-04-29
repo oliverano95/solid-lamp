@@ -1,11 +1,20 @@
 #include <pebble.h>
 
-#define MAX_EXERCISES 10 
+#define MAX_EXERCISES 15
 #define MAX_SLOTS 7
+#define EXPORT_BUF_SIZE 1024
+
 #define STORAGE_KEY_BASE 100 
 #define SETTINGS_KEY_BASE 200
 #define ACTIVE_STATE_KEY 300
 #define ACTIVE_EX_BASE 400
+#define ROUTINE_EX_BASE 1000 
+#define V5_MIGRATION_KEY 500 
+
+typedef struct {
+  char name[32];
+  int total_exercises;
+} RoutineHeader;
 
 typedef struct {
   char routine_name[32];
@@ -14,27 +23,27 @@ typedef struct {
   int curr_ex_idx;
   int workout_sec;
   int current_slot;
-  int peak_hr;      // NEW
-  int total_hr;     // NEW
-  int hr_samples;   // NEW
+  int peak_hr;      
+  int total_hr;     
+  int hr_samples;   
 } ActiveState;
-
-static bool s_workout_active = false; // Flags if we are mid-workout
-static bool s_has_resume = false;     // Flags if a snapshot exists on the watch
 
 // --- DATA STRUCTURES ---
 typedef struct {
-  char name[32]; 
+  char name[32];
+  char comment[32];
+  int target_weight;
+  int actual_weight[10];
   int target_sets;
   int target_reps;
-  int target_weight;
   int modifier;
   int current_set;
-  int actual_reps[10];   
-  int actual_weight[10];
+  int actual_reps[10];
 } Exercise;
 
 // --- APP STATE ---
+static bool s_workout_active = false; 
+static bool s_has_resume = false;     
 static char s_routine_name[32] = "No Routine";
 static Exercise s_exercises[MAX_EXERCISES];
 static int s_total_exercises = 0;
@@ -45,7 +54,7 @@ static int s_active_slots = 0;
 static int s_progression_mode = -1;
 static int s_weight_increment = 2;
 static int s_current_slot = 0;
-static bool s_is_paused = false; // NEW: To freeze the timer
+static bool s_is_paused = false; 
 static int s_peak_hr = 0;
 static int s_total_hr = 0;
 static int s_hr_samples = 0;
@@ -61,9 +70,11 @@ static int s_weight_unit_idx = 0;
 static int s_long_press_ms = 500; 
 static int s_drop_set_pct = 20; 
 static int s_super_rest_sec = 15;
-static int s_drop_rest_sec = 5;   // NEW: Default 0s for drop sets
-static int s_last_routine_slot = 0; // NEW: Memory for auto-suggest
-static int s_dark_mode = 0; // NEW: 0: Off, 1: On, 2: Auto
+static int s_drop_rest_sec = 5;   
+static int s_last_routine_slot = 0; 
+static int s_dark_mode = 0; 
+static int s_shortcut_up = 0;   
+static int s_shortcut_down = 2; 
 
 // --- THEME HELPERS ---
 static bool is_dark_theme() {
@@ -71,7 +82,6 @@ static bool is_dark_theme() {
   if (s_dark_mode == 2) {
     time_t temp = time(NULL);
     struct tm *t = localtime(&temp);
-    // NEW: Added 't &&' to ensure the watch actually knows what time it is first!
     if (t && (t->tm_hour >= 20 || t->tm_hour <= 7)) return true; 
   }
   return false;
@@ -94,11 +104,12 @@ static int s_highlight_box_width = 0;
 
 // --- UI ELEMENTS ---
 static Window *s_main_window, *s_settings_window, *s_workout_window, *s_help_window, *s_confirm_window, *s_summary_window, *s_variation_window, *s_exit_window;
-// NEW: Added s_sensation_window and s_sensation_menu_layer
 static Window *s_sensation_window;
 static MenuLayer *s_menu_layer, *s_settings_menu_layer, *s_variation_menu_layer, *s_sensation_menu_layer; 
 static Layer *s_main_header_bg, *s_settings_header_bg, *s_progress_layer, *s_workout_bg_layer, *s_summary_bg_layer, *s_rest_overlay_layer;
-static Layer *s_highlight_layer; // NEW V4.0 Animation Layer
+static Layer *s_highlight_layer; 
+static Animation *s_box_anim = NULL;
+static Animation *s_rest_anim = NULL;
 static TextLayer *s_main_header_text, *s_settings_header_text, *s_timer_layer, *s_clock_layer, *s_exercise_layer; 
 static TextLayer *s_next_exercise_layer, *s_set_layer, *s_label_reps_layer, *s_label_weight_layer, *s_target_reps_layer; 
 static TextLayer *s_target_weight_layer, *s_actual_reps_layer, *s_actual_weight_layer, *s_help_text_layer;
@@ -107,12 +118,17 @@ static TextLayer *s_hr_layer;
 #endif
 static TextLayer *s_confirm_text_layer, *s_sum_title_layer, *s_sum_info_layer, *s_exit_text_layer;
 static TextLayer *s_rest_title_layer, *s_rest_time_layer, *s_rest_skip_layer;
-
-// V4.0 METRICS GRID LAYERS (Removed Fireworks)
 static TextLayer *s_beat_layer, *s_missed_layer, *s_accuracy_layer, *s_density_layer;
 
-// V4.0 SENSATION DATA
-static int s_workout_sensation = 3; // Default 3 (Normal)
+static Window *s_mega_window;
+static SimpleMenuLayer *s_mega_menu_layer;
+static SimpleMenuSection s_mega_menu_sections[1];
+static SimpleMenuItem s_mega_menu_items[4];
+
+static Window *s_note_window;
+static TextLayer *s_note_text_layer;
+
+static int s_workout_sensation = 3; 
 static const char *s_sensation_titles[] = {"Unstoppable", "Strong", "Normal", "Exhausted", "Struggled"};
 static const char *s_sensation_subs[] = {"Felt amazing!", "Hit targets well", "Got work done", "Completely drained", "Felt weak/off"};
 
@@ -126,7 +142,6 @@ static int s_slot_to_edit = -1;
 static int s_target_swap_slot = -1; 
 static bool s_is_resting = false;
 static int s_rest_seconds_remaining = 0;
-
 
 // --- FORWARD DECLARATIONS FOR LAZY LOADING ---
 static void update_workout_ui(bool animate_box);
@@ -147,12 +162,10 @@ static void summary_window_unload(Window *window);
 static void summary_click_provider(void *context);
 
 // --- CORE UTILITIES ---
-
 static TextLayer* build_text_layer(GRect bounds, const char *font_key, GColor text_color, GTextAlignment alignment, Layer *parent) {
   TextLayer *text_layer = text_layer_create(bounds);
   text_layer_set_font(text_layer, fonts_get_system_font(font_key));
   
-  // V4.0 SMART DARK MODE INVERSION
   if (is_dark_theme()) {
     if (gcolor_equal(text_color, GColorBlack)) text_color = GColorWhite;
     else if (gcolor_equal(text_color, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack))) text_color = PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite);
@@ -169,7 +182,6 @@ static TextLayer* build_text_layer(GRect bounds, const char *font_key, GColor te
 }
 
 static GColor get_theme_color() {
-  // V4.0 B&W FIX: On 1-bit screens, the theme color MUST contrast the background!
   #if !defined(PBL_COLOR)
     return is_dark_theme() ? GColorWhite : GColorBlack;
   #else
@@ -206,6 +218,8 @@ static void load_settings() {
   if(persist_exists(SETTINGS_KEY_BASE + 12)) s_drop_rest_sec = persist_read_int(SETTINGS_KEY_BASE + 12);
   if(persist_exists(SETTINGS_KEY_BASE + 13)) s_last_routine_slot = persist_read_int(SETTINGS_KEY_BASE + 13);
   if(persist_exists(SETTINGS_KEY_BASE + 14)) s_dark_mode = persist_read_int(SETTINGS_KEY_BASE + 14);
+  if(persist_exists(SETTINGS_KEY_BASE + 15)) s_shortcut_up = persist_read_int(SETTINGS_KEY_BASE + 15);
+  if(persist_exists(SETTINGS_KEY_BASE + 16)) s_shortcut_down = persist_read_int(SETTINGS_KEY_BASE + 16);
 }
 
 static void save_setting(int key_offset, int value) {
@@ -226,8 +240,8 @@ static void parse_routine_string(const char *data) {
       if (token_count == 0) {
         snprintf(s_routine_name, sizeof(s_routine_name), "%s", temp);
       } else {
-        int ex_idx = (token_count - 1) / 5;
-        int field = (token_count - 1) % 5;
+        int ex_idx = (token_count - 1) / 6; 
+        int field = (token_count - 1) % 6;
         
         if (ex_idx < MAX_EXERCISES) {
           if (field == 0) snprintf(s_exercises[ex_idx].name, sizeof(s_exercises[ex_idx].name), "%s", temp);
@@ -236,14 +250,19 @@ static void parse_routine_string(const char *data) {
           else if (field == 3) s_exercises[ex_idx].target_weight = atoi(temp);
           else if (field == 4) {
             s_exercises[ex_idx].modifier = atoi(temp);
-            
             if (s_exercises[ex_idx].modifier == 1) {
                 s_exercises[ex_idx].target_sets *= 2;
                 if (s_exercises[ex_idx].target_sets > 10) s_exercises[ex_idx].target_sets = 10; 
             }
-            
             s_exercises[ex_idx].current_set = 1;
-            s_total_exercises = ex_idx + 1;
+          }
+          else if (field == 5) {
+            if (strcmp(temp, "-") == 0) {
+                s_exercises[ex_idx].comment[0] = '\0'; 
+            } else {
+                snprintf(s_exercises[ex_idx].comment, sizeof(s_exercises[ex_idx].comment), "%s", temp);
+            }
+            s_total_exercises = ex_idx + 1; 
           }
         }
       }
@@ -264,22 +283,26 @@ static void parse_routine_string(const char *data) {
 
 static void refresh_directory() {
   s_active_slots = 0;
-  
-  // OPTIMIZATION: Moving large arrays to static to prevent Stack Overflows
-  static char temp_data[256]; 
+  RoutineHeader header;
 
   for(int i = 0; i < MAX_SLOTS; i++) {
     if(persist_exists(STORAGE_KEY_BASE + i)) {
-      persist_read_string(STORAGE_KEY_BASE + i, temp_data, sizeof(temp_data));
+      persist_read_data(STORAGE_KEY_BASE + i, &header, sizeof(RoutineHeader));
       
       if (i != s_active_slots) {
-        persist_write_string(STORAGE_KEY_BASE + s_active_slots, temp_data);
+        persist_write_data(STORAGE_KEY_BASE + s_active_slots, &header, sizeof(RoutineHeader));
+        for(int j = 0; j < header.total_exercises; j++) {
+          Exercise temp_ex;
+          if (persist_read_data(ROUTINE_EX_BASE + (i * MAX_EXERCISES) + j, &temp_ex, sizeof(Exercise)) > 0) {
+              persist_write_data(ROUTINE_EX_BASE + (s_active_slots * MAX_EXERCISES) + j, &temp_ex, sizeof(Exercise));
+          }
+          persist_delete(ROUTINE_EX_BASE + (i * MAX_EXERCISES) + j);
+        }
         persist_delete(STORAGE_KEY_BASE + i);
       }
 
-      parse_routine_string(temp_data);
-      snprintf(s_slot_names[s_active_slots], sizeof(s_slot_names[s_active_slots]), "%s", s_routine_name);
-      s_slot_counts[s_active_slots] = s_total_exercises;
+      snprintf(s_slot_names[s_active_slots], sizeof(s_slot_names[s_active_slots]), "%s", header.name);
+      s_slot_counts[s_active_slots] = header.total_exercises;
       s_active_slots++;
     }
   }
@@ -290,7 +313,6 @@ static void refresh_directory() {
   }
 }
 
-// --- LAZY LOADING WRAPPERS ---
 // --- LAZY LOADING WRAPPERS ---
 static void push_settings_window() {
   if(!s_settings_window) {
@@ -342,14 +364,15 @@ static void push_summary_window() {
 
 // --- SETTINGS WINDOW LOGIC ---
 static uint16_t settings_get_num_sections_callback(MenuLayer *menu_layer, void *data) { 
-  return 4; 
+  return 5; 
 }
 
 static uint16_t settings_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) { 
-  if (section_index == 0) return 4; // Timers
-  if (section_index == 1) return 3; // Haptics
-  if (section_index == 2) return 1; // Modifiers
-  if (section_index == 3) return 4; // System
+  if (section_index == 0) return 4; 
+  if (section_index == 1) return 3; 
+  if (section_index == 2) return 1; 
+  if (section_index == 3) return 4; 
+  if (section_index == 4) return 2; 
   return 0;
 }
 
@@ -363,33 +386,34 @@ static void settings_draw_header_callback(GContext* ctx, const Layer *cell_layer
     case 1: menu_cell_basic_header_draw(ctx, cell_layer, "Haptics"); break;
     case 2: menu_cell_basic_header_draw(ctx, cell_layer, "Modifiers"); break;
     case 3: menu_cell_basic_header_draw(ctx, cell_layer, "System"); break;
+    case 4: menu_cell_basic_header_draw(ctx, cell_layer, "Shortcuts"); break;
   }
 }
 
 static void settings_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
   char title[32], subtitle[32];
-  const char* vibes[] = {"Off", "Short", "Long", "Double"};
-  const char* themes[] = {"Orange", "Blue", "Red", "Green"};
-  const char* units[] = {"kg", "lbs"};
+  static const char* vibes[] = {"Off", "Short", "Long", "Double"};
+  static const char* themes[] = {"Orange", "Blue", "Red", "Green"};
+  static const char* units[] = {"kg", "lbs"};
 
-  if (cell_index->section == 0) { // TIMERS
+  if (cell_index->section == 0) { 
     switch(cell_index->row) {
       case 0: snprintf(title, sizeof(title), "Set Rest"); snprintf(subtitle, sizeof(subtitle), "%ds", s_set_rest_sec); break;
       case 1: snprintf(title, sizeof(title), "Ex. Rest"); snprintf(subtitle, sizeof(subtitle), "%ds", s_ex_rest_sec); break;
       case 2: snprintf(title, sizeof(title), "Super Rest"); snprintf(subtitle, sizeof(subtitle), "%ds", s_super_rest_sec); break;
       case 3: snprintf(title, sizeof(title), "Drop Rest"); snprintf(subtitle, sizeof(subtitle), "%ds", s_drop_rest_sec); break;
     }
-  } else if (cell_index->section == 1) { // HAPTICS
+  } else if (cell_index->section == 1) { 
     switch(cell_index->row) {
       case 0: snprintf(title, sizeof(title), "Set Vibe"); snprintf(subtitle, sizeof(subtitle), "%s", vibes[s_set_vibe]); break;
       case 1: snprintf(title, sizeof(title), "Ex. Vibe"); snprintf(subtitle, sizeof(subtitle), "%s", vibes[s_ex_vibe]); break;
       case 2: snprintf(title, sizeof(title), "Rest Vibe"); snprintf(subtitle, sizeof(subtitle), "%s", vibes[s_rest_vibe]); break;
     }
-  } else if (cell_index->section == 2) { // MODIFIERS
+  } else if (cell_index->section == 2) { 
     switch(cell_index->row) {
       case 0: snprintf(title, sizeof(title), "Drop Set %%"); snprintf(subtitle, sizeof(subtitle), "-%d%%", s_drop_set_pct); break;
     }
-  } else if (cell_index->section == 3) { // SYSTEM
+  } else if (cell_index->section == 3) { 
     switch(cell_index->row) {
       case 0: 
         snprintf(title, sizeof(title), "Theme Color"); 
@@ -405,37 +429,41 @@ static void settings_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
         else snprintf(subtitle, sizeof(subtitle), "Auto (8PM-7AM)");
         break;
     }
+  } else if (cell_index->section == 4) { 
+    static const char* actions[] = {"Variations", "View Note", "Swap (Later)", "Skip Entirely"};
+    switch(cell_index->row) {
+      case 0: snprintf(title, sizeof(title), "Up Long Press"); snprintf(subtitle, sizeof(subtitle), "%s", actions[s_shortcut_up]); break;
+      case 1: snprintf(title, sizeof(title), "Down Long Press"); snprintf(subtitle, sizeof(subtitle), "%s", actions[s_shortcut_down]); break;
+    }
   }
   menu_cell_basic_draw(ctx, cell_layer, title, subtitle, NULL);
 }
 
 static void settings_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
-  if (cell_index->section == 0) { // TIMERS
+  if (cell_index->section == 0) { 
     switch(cell_index->row) {
       case 0: s_set_rest_sec += 15; if(s_set_rest_sec > 180) s_set_rest_sec = 0; save_setting(0, s_set_rest_sec); break;
       case 1: s_ex_rest_sec += 30; if(s_ex_rest_sec > 240) s_ex_rest_sec = 0; save_setting(1, s_ex_rest_sec); break;
       case 2: s_super_rest_sec += 5; if(s_super_rest_sec > 30) s_super_rest_sec = 0; save_setting(9, s_super_rest_sec); break;
       case 3: s_drop_rest_sec += 5; if(s_drop_rest_sec > 30) s_drop_rest_sec = 5; save_setting(12, s_drop_rest_sec); break; 
     }
-  } else if (cell_index->section == 1) { // HAPTICS
+  } else if (cell_index->section == 1) { 
     switch(cell_index->row) {
       case 0: s_set_vibe++; if(s_set_vibe > 3) s_set_vibe = 0; save_setting(2, s_set_vibe); play_vibe(s_set_vibe); break;
       case 1: s_ex_vibe++; if(s_ex_vibe > 3) s_ex_vibe = 0; save_setting(3, s_ex_vibe); play_vibe(s_ex_vibe); break;
       case 2: s_rest_vibe++; if(s_rest_vibe > 3) s_rest_vibe = 0; save_setting(4, s_rest_vibe); play_vibe(s_rest_vibe); break;
     }
-  } else if (cell_index->section == 2) { // MODIFIERS
+  } else if (cell_index->section == 2) { 
     switch(cell_index->row) {
       case 0: s_drop_set_pct += 5; if(s_drop_set_pct > 50) s_drop_set_pct = 10; save_setting(8, s_drop_set_pct); break;
     }
-  } else if (cell_index->section == 3) { // SYSTEM
+  } else if (cell_index->section == 3) { 
     switch(cell_index->row) {
       case 0: 
         s_theme_color_idx++; 
         if (s_theme_color_idx == 4) s_theme_color_idx = 0; 
         else if (s_theme_color_idx > 67) s_theme_color_idx = 4; 
         save_setting(5, s_theme_color_idx); 
-        
-        // V4.0 LIVE UPDATE: Apply the highlight color instantly
         menu_layer_set_highlight_colors(s_settings_menu_layer, get_theme_color(), get_bg_color()); 
         break;
       case 1: s_weight_unit_idx++; if(s_weight_unit_idx > 1) s_weight_unit_idx = 0; save_setting(6, s_weight_unit_idx); break;
@@ -444,12 +472,15 @@ static void settings_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
         s_dark_mode++; 
         if(s_dark_mode > 2) s_dark_mode = 0; 
         save_setting(14, s_dark_mode); 
-        
-        // V4.0 LIVE UPDATE: Instantly invert the active window and menu layer!
         window_set_background_color(s_settings_window, get_bg_color());
         menu_layer_set_normal_colors(s_settings_menu_layer, get_bg_color(), get_text_color());
         menu_layer_set_highlight_colors(s_settings_menu_layer, get_theme_color(), get_bg_color());
         break;
+    }
+  } else if (cell_index->section == 4) { 
+    switch(cell_index->row) {
+      case 0: s_shortcut_up++; if(s_shortcut_up > 3) s_shortcut_up = 0; save_setting(15, s_shortcut_up); break;
+      case 1: s_shortcut_down++; if(s_shortcut_down > 3) s_shortcut_down = 0; save_setting(16, s_shortcut_down); break;
     }
   }
   menu_layer_reload_data(s_settings_menu_layer);
@@ -461,7 +492,6 @@ static void header_bg_update_proc(Layer *layer, GContext *ctx) {
 }
 
 static void settings_select_long_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
-  // Ensure the Easter Egg still triggers on the Theme Color setting!
   if (cell_index->section == 3 && cell_index->row == 0) {
     if (s_theme_color_idx < 4) s_theme_color_idx = 4; 
     else s_theme_color_idx = 0; 
@@ -469,8 +499,6 @@ static void settings_select_long_callback(MenuLayer *menu_layer, MenuIndex *cell
     save_setting(5, s_theme_color_idx);
     vibes_double_pulse(); 
     menu_layer_reload_data(s_settings_menu_layer);
-    
-    // V4.0 LIVE UPDATE: Make sure the Easter Egg respects Dark Mode text colors!
     menu_layer_set_highlight_colors(s_settings_menu_layer, get_theme_color(), get_bg_color());
   }
 }
@@ -486,12 +514,12 @@ static void settings_window_load(Window *window) {
   s_settings_header_text = build_text_layer(GRect(0, 6, bounds.size.w, 30), FONT_KEY_GOTHIC_24_BOLD, GColorWhite, GTextAlignmentCenter, s_settings_header_bg);
   text_layer_set_text(s_settings_header_text, "Settings");
 
-s_settings_menu_layer = menu_layer_create(GRect(0, 40, bounds.size.w, bounds.size.h - 40));
+  s_settings_menu_layer = menu_layer_create(GRect(0, 40, bounds.size.w, bounds.size.h - 40));
   menu_layer_set_callbacks(s_settings_menu_layer, NULL, (MenuLayerCallbacks){
-    .get_num_sections = settings_get_num_sections_callback,      // NEW
+    .get_num_sections = settings_get_num_sections_callback,  
     .get_num_rows = settings_get_num_rows_callback,
-    .get_header_height = settings_get_header_height_callback,    // NEW
-    .draw_header = settings_draw_header_callback,                // NEW
+    .get_header_height = settings_get_header_height_callback,    
+    .draw_header = settings_draw_header_callback,                
     .draw_row = settings_draw_row_callback,
     .select_click = settings_select_callback,
     .select_long_click = settings_select_long_callback, 
@@ -508,12 +536,10 @@ static void settings_window_unload(Window *window) {
   layer_destroy(s_settings_header_bg);
   menu_layer_destroy(s_settings_menu_layer); 
   
-  // V4.0 FIX: Live update the Main Menu colors when exiting settings
   window_set_background_color(s_main_window, get_bg_color());
   menu_layer_set_normal_colors(s_menu_layer, get_bg_color(), get_text_color());
   menu_layer_set_highlight_colors(s_menu_layer, get_theme_color(), get_bg_color());
   
-  // Clear cached windows so they rebuild with the new theme when opened
   if (s_workout_window) { window_destroy(s_workout_window); s_workout_window = NULL; }
   if (s_summary_window) { window_destroy(s_summary_window); s_summary_window = NULL; }
 }
@@ -553,24 +579,41 @@ static void edit_down_click(ClickRecognizerRef recognizer, void *context) {
 static void edit_select_click(ClickRecognizerRef recognizer, void *context) {
   if (s_slot_to_edit == s_target_swap_slot) {
     persist_delete(STORAGE_KEY_BASE + s_slot_to_edit);
+    for(int j = 0; j < MAX_EXERCISES; j++) persist_delete(ROUTINE_EX_BASE + (s_slot_to_edit * MAX_EXERCISES) + j);
   } else {
-    char edit_data[256], target_data[256];
+    RoutineHeader edit_header, target_header;
     bool target_exists = persist_exists(STORAGE_KEY_BASE + s_target_swap_slot);
-    persist_read_string(STORAGE_KEY_BASE + s_slot_to_edit, edit_data, sizeof(edit_data));
-    if (target_exists) persist_read_string(STORAGE_KEY_BASE + s_target_swap_slot, target_data, sizeof(target_data));
-    persist_write_string(STORAGE_KEY_BASE + s_target_swap_slot, edit_data);
-    if (target_exists) persist_write_string(STORAGE_KEY_BASE + s_slot_to_edit, target_data);
+    
+    persist_read_data(STORAGE_KEY_BASE + s_slot_to_edit, &edit_header, sizeof(RoutineHeader));
+    if (target_exists) persist_read_data(STORAGE_KEY_BASE + s_target_swap_slot, &target_header, sizeof(RoutineHeader));
+    
+    persist_write_data(STORAGE_KEY_BASE + s_target_swap_slot, &edit_header, sizeof(RoutineHeader));
+    if (target_exists) persist_write_data(STORAGE_KEY_BASE + s_slot_to_edit, &target_header, sizeof(RoutineHeader));
     else persist_delete(STORAGE_KEY_BASE + s_slot_to_edit);
+
+    for(int j = 0; j < MAX_EXERCISES; j++) {
+        Exercise edit_ex, target_ex;
+        bool e_exists = (persist_read_data(ROUTINE_EX_BASE + (s_slot_to_edit * MAX_EXERCISES) + j, &edit_ex, sizeof(Exercise)) > 0);
+        bool t_exists = target_exists && (persist_read_data(ROUTINE_EX_BASE + (s_target_swap_slot * MAX_EXERCISES) + j, &target_ex, sizeof(Exercise)) > 0);
+
+        if (e_exists) persist_write_data(ROUTINE_EX_BASE + (s_target_swap_slot * MAX_EXERCISES) + j, &edit_ex, sizeof(Exercise));
+        else persist_delete(ROUTINE_EX_BASE + (s_target_swap_slot * MAX_EXERCISES) + j);
+
+        if (t_exists) persist_write_data(ROUTINE_EX_BASE + (s_slot_to_edit * MAX_EXERCISES) + j, &target_ex, sizeof(Exercise));
+        else persist_delete(ROUTINE_EX_BASE + (s_slot_to_edit * MAX_EXERCISES) + j);
+    }
   }
   refresh_directory();
   menu_layer_reload_data(s_menu_layer);
   window_stack_pop(true);
 }
+
 static void confirm_click_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_SELECT, edit_select_click);
   window_single_click_subscribe(BUTTON_ID_UP, edit_up_click);
   window_single_click_subscribe(BUTTON_ID_DOWN, edit_down_click);
 }
+
 static void confirm_window_load(Window *window) {
   Layer *w_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(w_layer);
@@ -582,34 +625,33 @@ static void confirm_window_unload(Window *window) { text_layer_destroy(s_confirm
 // --- EXIT CONFIRMATION LOGIC ---
 static void exit_up_click(ClickRecognizerRef recognizer, void *context) {
   s_is_paused = false;
-  window_stack_pop(true); // Resume Workout
+  window_stack_pop(true); 
 }
 
 static void exit_select_click(ClickRecognizerRef recognizer, void *context) {
   s_is_paused = false;
-  s_workout_active = false;          // NEW
-  persist_delete(ACTIVE_STATE_KEY);  // NEW
+  s_workout_active = false;          
+  persist_delete(ACTIVE_STATE_KEY);  
   vibes_double_pulse();
   push_sensation_window(); 
-  window_stack_remove(s_workout_window, false); // Kill workout window silently
-  window_stack_remove(s_exit_window, false);    // Kill exit window silently
+  window_stack_remove(s_workout_window, false); 
+  window_stack_remove(s_exit_window, false);    
 }
 
 static void exit_down_click(ClickRecognizerRef recognizer, void *context) {
   s_is_paused = false;
-  s_workout_active = false;          // NEW
-  s_has_resume = false;              // NEW
-  persist_delete(ACTIVE_STATE_KEY);  // NEW
-  window_stack_remove(s_workout_window, false); // Kill workout window silently
-  window_stack_pop(true); // Pop exit window (returns to Main Menu)
-  menu_layer_reload_data(s_menu_layer); // Refresh main menu
+  s_workout_active = false;          
+  s_has_resume = false;              
+  persist_delete(ACTIVE_STATE_KEY);  
+  window_stack_remove(s_workout_window, false); 
+  window_stack_pop(true); 
+  menu_layer_reload_data(s_menu_layer); 
 }
 
 static void exit_click_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, exit_up_click);
   window_single_click_subscribe(BUTTON_ID_SELECT, exit_select_click);
   window_single_click_subscribe(BUTTON_ID_DOWN, exit_down_click);
-  // Also map the back button to "Resume" so they don't accidentally close the prompt and stay stuck paused
   window_single_click_subscribe(BUTTON_ID_BACK, exit_up_click); 
 }
 
@@ -642,10 +684,9 @@ static void sensation_draw_row_callback(GContext* ctx, const Layer *cell_layer, 
 }
 
 static void sensation_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
-  // Map index 0-4 to a score of 5 down to 1
   s_workout_sensation = 5 - cell_index->row; 
-  push_summary_window(); // Move to the summary
-  window_stack_remove(s_sensation_window, false); // Silently remove this window from the back-stack
+  push_summary_window(); 
+  window_stack_remove(s_sensation_window, false); 
 }
 
 static void sensation_window_load(Window *window) {
@@ -678,6 +719,7 @@ static void push_sensation_window() {
 
 // --- SUMMARY WINDOW LOGIC ---
 static void summary_exit_click(ClickRecognizerRef recognizer, void *context) { window_stack_pop(true); }
+
 static void summary_click_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, summary_exit_click);
   window_single_click_subscribe(BUTTON_ID_DOWN, summary_exit_click);
@@ -701,19 +743,16 @@ static void summary_bg_update_proc(Layer *layer, GContext *ctx) {
   
   int box_w = mid - 15;
   
-  // V4.0 B&W FIX: Boxes become White in B&W Dark Mode
-  GColor bw_box_color = is_dark_theme() ? GColorWhite : GColorBlack;
-  
-  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorIslamicGreen, bw_box_color));
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorIslamicGreen, is_dark_theme() ? GColorWhite : GColorBlack));
   graphics_fill_rect(ctx, GRect(10, y_top, box_w, box_h), 4, GCornersAll);
   
-  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, bw_box_color));
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, is_dark_theme() ? GColorWhite : GColorBlack));
   graphics_fill_rect(ctx, GRect(mid + 5, y_top, box_w, box_h), 4, GCornersAll);
 
-  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorCobaltBlue, bw_box_color));
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorCobaltBlue, is_dark_theme() ? GColorWhite : GColorBlack));
   graphics_fill_rect(ctx, GRect(10, y_bot, box_w, box_h), 4, GCornersAll);
 
-  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, bw_box_color));
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, is_dark_theme() ? GColorWhite : GColorBlack));
   graphics_fill_rect(ctx, GRect(mid + 5, y_bot, box_w, box_h), 4, GCornersAll);
 }
 
@@ -750,7 +789,6 @@ static void summary_window_load(Window *window) {
   layer_set_update_proc(s_summary_bg_layer, summary_bg_update_proc);
   layer_add_child(w_layer, s_summary_bg_layer);
 
-  // Create the 4 Grid Text Layers
   GColor grid_text_color = PBL_IF_COLOR_ELSE(GColorWhite, is_dark_theme() ? GColorBlack : GColorWhite);
   
   s_beat_layer = build_text_layer(GRect(10, y_top + 2, box_w, box_h), FONT_KEY_GOTHIC_14_BOLD, grid_text_color, GTextAlignmentCenter, w_layer);
@@ -758,7 +796,6 @@ static void summary_window_load(Window *window) {
   s_accuracy_layer = build_text_layer(GRect(10, y_bot + 2, box_w, box_h), FONT_KEY_GOTHIC_14_BOLD, grid_text_color, GTextAlignmentCenter, w_layer);
   s_density_layer = build_text_layer(GRect(mid + 5, y_bot + 2, box_w, box_h), FONT_KEY_GOTHIC_14_BOLD, grid_text_color, GTextAlignmentCenter, w_layer);
 
-  // V4.0 FIX: Force the text color here to bypass the "Smart Inversion" from build_text_layer!
   text_layer_set_text_color(s_beat_layer, grid_text_color);
   text_layer_set_text_color(s_missed_layer, grid_text_color);
   text_layer_set_text_color(s_accuracy_layer, grid_text_color);
@@ -773,7 +810,6 @@ static void summary_window_load(Window *window) {
   snprintf(title_buf, sizeof(title_buf), "Done! %02d:%02d", m, s);
   text_layer_set_text(s_sum_title_layer, title_buf);
 
-  // V4.0 METRICS CALCULATION
   int sets_above = 0, sets_below = 0;
   int total_target_reps = 0, total_actual_reps = 0, total_volume = 0;
 
@@ -789,7 +825,6 @@ static void summary_window_load(Window *window) {
           t_w = (t_w * (100 - s_drop_set_pct)) / 100;
       }
       
-      // Accuracy & Density Math
       total_target_reps += t_r;
       total_actual_reps += a_r;
       total_volume += (a_r * a_w);
@@ -801,19 +836,16 @@ static void summary_window_load(Window *window) {
       }
     }
     
-    // PROGRESSION LOGIC
     if (s_progression_mode != -1 && ex_misses == 0) {
       if (s_progression_mode == 0) s_exercises[i].target_weight += s_weight_increment;
       else if (s_progression_mode == 1) s_exercises[i].target_reps += 1;
     }
   }
 
-  // Calculate Finals
   int accuracy = (total_target_reps > 0) ? ((total_actual_reps * 100) / total_target_reps) : 0;
   int density = (s_workout_sec > 0) ? ((total_volume * 60) / s_workout_sec) : 0;
 
-  // Render text into the boxes
-  static char beat_buf[32], missed_buf[32], acc_buf[32], den_buf[32];
+  static char beat_buf[16], missed_buf[16], acc_buf[16], den_buf[16];
   snprintf(beat_buf, sizeof(beat_buf), "Beat\n%d", sets_above);
   snprintf(missed_buf, sizeof(missed_buf), "Miss\n%d", sets_below);
   snprintf(acc_buf, sizeof(acc_buf), "Acc\n%d%%", accuracy);
@@ -829,67 +861,74 @@ static void summary_window_load(Window *window) {
   char date_buf[32];
   strftime(date_buf, sizeof(date_buf), "%Y-%m-%d %H:%M", tick_time);
 
-  // V4.0 NEW: Calculate the Average HR safely
   int avg_hr = 0;
   if (s_hr_samples > 0) avg_hr = s_total_hr / s_hr_samples;
 
-  static char export_buf[512]; 
-  int limit = sizeof(export_buf);
+  char *export_buf = malloc(EXPORT_BUF_SIZE); 
+  char *sync_buf = malloc(EXPORT_BUF_SIZE); 
   
-  // V4.0 EXPORT UPGRADE: Now includes Sensation, Accuracy, Density, Peak HR, and Avg HR!
-  int written = snprintf(export_buf, limit, "%s|%s|%d|%d|%d|%d|%d|%d", 
-                         s_routine_name, date_buf, s_workout_sec, s_workout_sensation, accuracy, density, s_peak_hr, avg_hr);
-                         
-  int offset = (written < limit) ? written : limit - 1;
+  if (export_buf && sync_buf) {
+      int limit = EXPORT_BUF_SIZE;
+      int written = snprintf(export_buf, limit, "%s|%s|%d|%d|%d|%d|%d|%d", 
+                             s_routine_name, date_buf, s_workout_sec, s_workout_sensation, accuracy, density, s_peak_hr, avg_hr);
+      int offset = (written < limit) ? written : limit - 1;
 
-  for(int i = 0; i < s_total_exercises; i++) {
-    if (offset >= limit - 1) break; 
-    const char *mod_label = "";
-    if (s_exercises[i].modifier == 1) mod_label = " [DROP]";
-    else if (s_exercises[i].modifier == 2) mod_label = " [SUPER]";
-    
-    written = snprintf(export_buf + offset, limit - offset, "|%s%s", s_exercises[i].name, mod_label);
-    offset += (written < limit - offset) ? written : limit - offset - 1;
-    
-    for(int j = 0; j < s_exercises[i].target_sets; j++) {
-      if (offset >= limit - 1) break; 
-      written = snprintf(export_buf + offset, limit - offset, "|%d|%d", s_exercises[i].actual_reps[j], s_exercises[i].actual_weight[j]);
-      offset += (written < limit - offset) ? written : limit - offset - 1;
-    }
-  }
-  
-  // --- RESTORED PROGRESSION SAVE LOGIC ---
-  if (s_progression_mode != -1) {
-    // V4.0 FINAL FIX: Made this static to protect the call stack!
-    static char updated_routine[256]; 
-    int r_limit = sizeof(updated_routine);
-    int r_written = snprintf(updated_routine, r_limit, "%s", s_routine_name);
-    int r_offset = (r_written < r_limit) ? r_written : r_limit - 1;
-
-    for (int i = 0; i < s_total_exercises; i++) {
-      if (r_offset >= r_limit - 1) break;
+      for(int i = 0; i < s_total_exercises; i++) {
+        if (offset >= limit - 1) break; 
+        const char *mod_label = "";
+        if (s_exercises[i].modifier == 1) mod_label = " [DROP]";
+        else if (s_exercises[i].modifier == 2) mod_label = " [SUPER]";
+        
+        written = snprintf(export_buf + offset, limit - offset, "|%s%s", s_exercises[i].name, mod_label);
+        offset += (written < limit - offset) ? written : limit - offset - 1;
+        
+        for(int j = 0; j < s_exercises[i].target_sets; j++) {
+          if (offset >= limit - 1) break; 
+          written = snprintf(export_buf + offset, limit - offset, "|%d|%d", s_exercises[i].actual_reps[j], s_exercises[i].actual_weight[j]);
+          offset += (written < limit - offset) ? written : limit - offset - 1;
+        }
+      }
       
-      // Because Drop Sets doubled the target_sets in memory, we must halve them for storage
-      int base_sets = s_exercises[i].target_sets;
-      if (s_exercises[i].modifier == 1) base_sets = base_sets / 2;
+      int s_written = snprintf(sync_buf, limit, "%s|%d|%d", s_routine_name, s_progression_mode, s_weight_increment);
+      int s_off = (s_written < limit) ? s_written : limit - 1;
 
-      r_written = snprintf(updated_routine + r_offset, r_limit - r_offset, "|%s|%d|%d|%d|%d",
-          s_exercises[i].name, base_sets, s_exercises[i].target_reps, 
-          s_exercises[i].target_weight, s_exercises[i].modifier);
-          
-      r_offset += (r_written < r_limit - r_offset) ? r_written : r_limit - r_offset - 1;
-    }
-    persist_write_string(STORAGE_KEY_BASE + s_current_slot, updated_routine);
+      if (s_progression_mode != -1) {
+        for (int i = 0; i < s_total_exercises; i++) {
+          int base_sets = s_exercises[i].target_sets;
+          if (s_exercises[i].modifier == 1) {
+              s_exercises[i].target_sets = base_sets / 2;
+          }
+
+          persist_write_data(ROUTINE_EX_BASE + (s_current_slot * MAX_EXERCISES) + i, &s_exercises[i], sizeof(Exercise));
+
+          if (s_off < limit - 1) {
+              s_written = snprintf(sync_buf + s_off, limit - s_off, "|%s|%d|%d|%d|%d|%s", 
+                  s_exercises[i].name, s_exercises[i].target_sets, s_exercises[i].target_reps, 
+                  s_exercises[i].target_weight, s_exercises[i].modifier, 
+                  s_exercises[i].comment[0] != '\0' ? s_exercises[i].comment : "-");
+              s_off += (s_written < limit - s_off) ? s_written : limit - s_off - 1;
+          }
+          s_exercises[i].target_sets = base_sets;
+        }
+      }
+      
+      DictionaryIterator *iter;
+      if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
+          dict_write_cstring(iter, MESSAGE_KEY_WORKOUT_SUMMARY, export_buf);
+          if (s_progression_mode != -1) {
+              dict_write_cstring(iter, MESSAGE_KEY_ROUTINE_DATA, sync_buf);
+          }
+          app_message_outbox_send();
+          text_layer_set_text(s_sum_info_layer, "Data synced!\nPress any button.");
+      } else {
+          text_layer_set_text(s_sum_info_layer, "Sync Failed.\nCheck Bluetooth.");
+      }
+  } else {
+      text_layer_set_text(s_sum_info_layer, "Memory Error.\nCannot sync.");
   }
   
-  DictionaryIterator *iter;
-  if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
-      dict_write_cstring(iter, MESSAGE_KEY_WORKOUT_SUMMARY, export_buf);
-      app_message_outbox_send();
-      text_layer_set_text(s_sum_info_layer, "Data synced!\nPress any button.");
-  } else {
-      text_layer_set_text(s_sum_info_layer, "Sync Failed.\nCheck Bluetooth.");
-  }
+  if (export_buf) free(export_buf);
+  if (sync_buf) free(sync_buf);
 }
 
 static void summary_window_unload(Window *window) {
@@ -921,7 +960,6 @@ static void variation_select_callback(MenuLayer *menu_layer, MenuIndex *cell_ind
   
   for (int i = 1; i < NUM_VARIATIONS; i++) { 
     char *match = strstr(base_name, s_variations[i]);
-    
     if (match && match == base_name + strlen(base_name) - strlen(s_variations[i])) {
       if (match > base_name && *(match - 1) == ' ') *(match - 1) = '\0';
       else *match = '\0';
@@ -932,11 +970,11 @@ static void variation_select_callback(MenuLayer *menu_layer, MenuIndex *cell_ind
   if (cell_index->row == 0) {
     strncpy(ex->name, base_name, sizeof(ex->name) - 1);
   } else {
-    char temp[32];
-    snprintf(temp, sizeof(temp), "%s %s", base_name, var_str);
-    strncpy(ex->name, temp, sizeof(ex->name) - 1);
+    char big_temp[64];
+    snprintf(big_temp, sizeof(big_temp), "%s %s", base_name, var_str);
+    strncpy(s_exercises[s_curr_ex_idx].name, big_temp, sizeof(s_exercises[s_curr_ex_idx].name) - 1);
+    s_exercises[s_curr_ex_idx].name[sizeof(s_exercises[s_curr_ex_idx].name) - 1] = '\0';
   }
-  ex->name[sizeof(ex->name) - 1] = '\0'; 
   
   update_workout_ui(false);
   window_stack_pop(true);
@@ -989,7 +1027,6 @@ static void progress_update_proc(Layer *layer, GContext *ctx) {
       }
     }
     
-    // V4.0 B&W FIX: Make the background track hide in Dark Mode, and use the smart theme color!
     GColor track_color = is_dark_theme() ? PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack) : PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite);
     
     #if defined(PBL_ROUND)
@@ -1015,20 +1052,18 @@ static void progress_update_proc(Layer *layer, GContext *ctx) {
 
 static void workout_bg_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
-
   graphics_context_set_stroke_color(ctx, is_dark_theme() ? PBL_IF_COLOR_ELSE(GColorDarkGray, GColorWhite) : PBL_IF_COLOR_ELSE(GColorLightGray, GColorDarkGray));
   graphics_context_set_stroke_width(ctx, 2); 
   graphics_draw_line(ctx, GPoint(0, s_line1_y), GPoint(bounds.size.w, s_line1_y));
   graphics_draw_line(ctx, GPoint(0, s_line2_y), GPoint(bounds.size.w, s_line2_y));
-
 }
 
 static void rest_bg_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_fill_color(ctx, get_bg_color()); // DYNAMIC BG
+  graphics_context_set_fill_color(ctx, get_bg_color()); 
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   
-  graphics_context_set_stroke_color(ctx, is_dark_theme() ? PBL_IF_COLOR_ELSE(GColorDarkGray, GColorWhite) : PBL_IF_COLOR_ELSE(GColorLightGray, GColorDarkGray)); // DYNAMIC LINE
+  graphics_context_set_stroke_color(ctx, is_dark_theme() ? PBL_IF_COLOR_ELSE(GColorDarkGray, GColorWhite) : PBL_IF_COLOR_ELSE(GColorLightGray, GColorDarkGray)); 
   graphics_context_set_stroke_width(ctx, 2); 
   graphics_draw_line(ctx, GPoint(0, 0), GPoint(bounds.size.w, 0));
 }
@@ -1037,8 +1072,11 @@ static void highlight_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   graphics_context_set_stroke_color(ctx, get_theme_color());
   graphics_context_set_stroke_width(ctx, 4); 
-  // Inset by 2 pixels so the thick stroke doesn't get cut off by the layer boundary
   graphics_draw_round_rect(ctx, grect_inset(bounds, GEdgeInsets(2)), 8);
+}
+
+static void box_anim_stopped_handler(Animation *animation, bool finished, void *context) {
+  s_box_anim = NULL;
 }
 
 static void animate_highlight_box(bool animated) {
@@ -1057,19 +1095,64 @@ static void animate_highlight_box(bool animated) {
     } else { offset_x = 20; }
   #endif
 
-  int center_x = (s_edit_mode == 0) ? ((half_w / 2) + offset_x) : ((half_w + (half_w / 2)) - offset_x);
-  int layer_w = s_highlight_box_width + 8; // Added padding for the stroke
+  bool is_bw = (s_exercises[s_curr_ex_idx].modifier == 4);
+  int center_x;
   
+  if (is_bw) {
+      center_x = bounds.size.w / 2;
+  } else {
+      center_x = (s_edit_mode == 0) ? ((half_w / 2) + offset_x) : ((half_w + (half_w / 2)) - offset_x);
+  }
+
+  int layer_w = s_highlight_box_width + 8; 
   GRect target_rect = GRect(center_x - (layer_w / 2), box_y_coord, layer_w, box_height);
   
+  if (s_box_anim) {
+      animation_unschedule(s_box_anim);
+      s_box_anim = NULL;
+  }
+
   if (animated) {
-    PropertyAnimation *anim = property_animation_create_layer_frame(s_highlight_layer, NULL, &target_rect);
-    animation_set_duration((Animation*)anim, 250);
-    animation_set_curve((Animation*)anim, AnimationCurveEaseOut); 
-    animation_schedule((Animation*)anim); // Automatically cleans up memory when finished!
+    GRect current_rect = layer_get_frame(s_highlight_layer);
+    int current_x = current_rect.origin.x;
+    int target_x = target_rect.origin.x;
+    
+    if (current_x != target_x && current_rect.size.w > 0) {
+        int direction = (target_x > current_x) ? 1 : -1;
+        
+        GRect overshoot_rect = target_rect;
+        overshoot_rect.origin.x += (direction * 8); 
+        
+        PropertyAnimation *anim1 = property_animation_create_layer_frame(s_highlight_layer, &current_rect, &overshoot_rect);
+        Animation *a1 = property_animation_get_animation(anim1);
+        animation_set_duration(a1, 150);
+        animation_set_curve(a1, AnimationCurveEaseOut);
+        
+        PropertyAnimation *anim2 = property_animation_create_layer_frame(s_highlight_layer, &overshoot_rect, &target_rect);
+        Animation *a2 = property_animation_get_animation(anim2);
+        animation_set_duration(a2, 100);
+        animation_set_curve(a2, AnimationCurveEaseInOut);
+        
+        s_box_anim = animation_sequence_create(a1, a2, NULL);
+    } else {
+        PropertyAnimation *anim1 = property_animation_create_layer_frame(s_highlight_layer, NULL, &target_rect);
+        s_box_anim = property_animation_get_animation(anim1);
+        animation_set_duration(s_box_anim, 200);
+        animation_set_curve(s_box_anim, AnimationCurveEaseOut);
+    }
+    
+    animation_set_handlers(s_box_anim, (AnimationHandlers) {
+        .stopped = box_anim_stopped_handler
+    }, NULL);
+    
+    animation_schedule(s_box_anim);
   } else {
     layer_set_frame(s_highlight_layer, target_rect);
   }
+}
+
+static void rest_anim_stopped_handler(Animation *animation, bool finished, void *context) {
+  s_rest_anim = NULL;
 }
 
 static void set_rest_overlay_state(bool is_resting, bool animated) {
@@ -1078,24 +1161,35 @@ static void set_rest_overlay_state(bool is_resting, bool animated) {
   int rest_box_height = s_line2_y - s_line1_y;
   
   GRect on_screen = GRect(0, s_line1_y, bounds.size.w, rest_box_height);
-  // Hide it by pushing it completely off the bottom of the watch face!
   GRect off_screen = GRect(0, bounds.size.h, bounds.size.w, rest_box_height); 
   
   GRect target_rect = is_resting ? on_screen : off_screen;
   
   if (animated) {
-    if (is_resting) layer_set_hidden(s_rest_overlay_layer, false); // Make sure it's visible before sliding up
+    if (is_resting) layer_set_hidden(s_rest_overlay_layer, false); 
+    
+    if (s_rest_anim) {
+        animation_unschedule(s_rest_anim);
+        s_rest_anim = NULL;
+    }
+    
     PropertyAnimation *anim = property_animation_create_layer_frame(s_rest_overlay_layer, NULL, &target_rect);
-    animation_set_duration((Animation*)anim, 300);
-    animation_set_curve((Animation*)anim, AnimationCurveEaseInOut);
-    animation_schedule((Animation*)anim);
+    s_rest_anim = property_animation_get_animation(anim);
+    
+    animation_set_duration(s_rest_anim, 300);
+    animation_set_curve(s_rest_anim, AnimationCurveEaseInOut);
+    animation_set_handlers(s_rest_anim, (AnimationHandlers) {
+        .stopped = rest_anim_stopped_handler
+    }, NULL);
+    
+    animation_schedule(s_rest_anim);
   } else {
     layer_set_frame(s_rest_overlay_layer, target_rect);
     if (!is_resting) layer_set_hidden(s_rest_overlay_layer, true);
   }
 }
 
-static void update_workout_ui(bool animate_box) { // Changed this line!
+static void update_workout_ui(bool animate_box) { 
   Exercise *ex = &s_exercises[s_curr_ex_idx];
   
   Layer *w_layer = window_get_root_layer(s_workout_window);
@@ -1115,12 +1209,10 @@ static void update_workout_ui(bool animate_box) { // Changed this line!
   
   text_layer_set_text(s_exercise_layer, ex->name);
 
-// --- DYNAMIC "NEXT" LABEL LOGIC ---
   static char next_buf[64];
   bool is_second_half = (s_curr_ex_idx > 0 && s_exercises[s_curr_ex_idx - 1].modifier == 2);
   
   if (is_second_half && ex->current_set < ex->target_sets) {
-      // If we are on the second half of a superset, we bounce BACK to the first half!
       snprintf(next_buf, sizeof(next_buf), "NEXT: %s", s_exercises[s_curr_ex_idx - 1].name);
   } else if (s_curr_ex_idx + 1 < s_total_exercises) {
       snprintf(next_buf, sizeof(next_buf), "NEXT: %s", s_exercises[s_curr_ex_idx + 1].name);
@@ -1129,13 +1221,14 @@ static void update_workout_ui(bool animate_box) { // Changed this line!
   }
   text_layer_set_text(s_next_exercise_layer, next_buf);
 
-  // --- DROP SET UI LOGIC ---
   int active_target_weight = ex->target_weight;
   static char set_buf[32];
 
   if (ex->modifier == 1 && (ex->current_set % 2 == 0)) {
       active_target_weight = (active_target_weight * (100 - s_drop_set_pct)) / 100;
       snprintf(set_buf, sizeof(set_buf), "Set %d of %d (DROP)", ex->current_set, ex->target_sets);
+  } else if (ex->modifier == 3) {
+      snprintf(set_buf, sizeof(set_buf), "Set %d of %d (WARM)", ex->current_set, ex->target_sets);
   } else {
       snprintf(set_buf, sizeof(set_buf), "Set %d of %d", ex->current_set, ex->target_sets);
   }
@@ -1148,14 +1241,40 @@ static void update_workout_ui(bool animate_box) { // Changed this line!
 
   static char t_reps_buf[32], t_weight_buf[32], reps_buf[16], weight_buf[16];
   snprintf(t_reps_buf, sizeof(t_reps_buf), "Target: %d", ex->target_reps);
-  snprintf(t_weight_buf, sizeof(t_weight_buf), "Target: %d", active_target_weight); 
   snprintf(reps_buf, sizeof(reps_buf), "%d", s_temp_reps);
-  snprintf(weight_buf, sizeof(weight_buf), "%d", s_temp_weight);
+
+  if (s_weight_unit_idx == 0) text_layer_set_text(s_label_weight_layer, "Weight (kg)");
+  else text_layer_set_text(s_label_weight_layer, "Weight (lbs)");
   
+  snprintf(t_weight_buf, sizeof(t_weight_buf), "Target: %d", active_target_weight); 
+  snprintf(weight_buf, sizeof(weight_buf), "%d", s_temp_weight);
+
   text_layer_set_text(s_target_reps_layer, t_reps_buf);
   text_layer_set_text(s_target_weight_layer, t_weight_buf);
   text_layer_set_text(s_actual_reps_layer, reps_buf);
   text_layer_set_text(s_actual_weight_layer, weight_buf);
+
+  bool is_bw = (ex->modifier == 4);
+  layer_set_hidden(text_layer_get_layer(s_label_weight_layer), is_bw);
+  layer_set_hidden(text_layer_get_layer(s_actual_weight_layer), is_bw);
+  layer_set_hidden(text_layer_get_layer(s_target_weight_layer), is_bw);
+
+  int offset_x = 0;
+  #if defined(PBL_ROUND)
+    offset_x = (bounds.size.h <= 180) ? 10 : 20;
+  #endif
+  
+  int half_w = bounds.size.w / 2;
+
+  if (is_bw) {
+      layer_set_frame(text_layer_get_layer(s_label_reps_layer), GRect(0, s_labels_y, bounds.size.w, 20));
+      layer_set_frame(text_layer_get_layer(s_actual_reps_layer), GRect(0, s_actual_y, bounds.size.w, 40));
+      layer_set_frame(text_layer_get_layer(s_target_reps_layer), GRect(0, s_target_y, bounds.size.w, 22));
+  } else {
+      layer_set_frame(text_layer_get_layer(s_label_reps_layer), GRect(offset_x, s_labels_y, half_w, 20));
+      layer_set_frame(text_layer_get_layer(s_actual_reps_layer), GRect(offset_x, s_actual_y, half_w, 40));
+      layer_set_frame(text_layer_get_layer(s_target_reps_layer), GRect(offset_x, s_target_y, half_w, 22));
+  }
 
   GColor active_color = get_theme_color();
   GColor inactive_color = is_dark_theme() ? PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite) : PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack);
@@ -1182,13 +1301,11 @@ static void update_workout_ui(bool animate_box) { // Changed this line!
   if (s3.w > max_w) max_w = s3.w;
   s_highlight_box_width = max_w + 16; 
   
-  int half_w = bounds.size.w / 2;
   if (s_highlight_box_width > half_w - 4) s_highlight_box_width = half_w - 4; 
   
   text_layer_set_text_color(s_rest_time_layer, active_color);
   layer_mark_dirty(s_progress_layer);
   
-  // V4.0 ANIMATION: Move the box!
   animate_highlight_box(animate_box);
 }
 
@@ -1202,7 +1319,6 @@ static void skip_exercise() {
   if (s_is_resting) return;
   if (s_curr_ex_idx + 1 >= s_total_exercises) return;
 
-  // Do not allow skipping if the exercise is part of a Superset to prevent breaking the chain!
   if (s_exercises[s_curr_ex_idx].modifier == 2 || (s_curr_ex_idx > 0 && s_exercises[s_curr_ex_idx - 1].modifier == 2)) {
       return; 
   }
@@ -1212,8 +1328,7 @@ static void skip_exercise() {
   s_exercises[s_curr_ex_idx] = s_exercises[next_idx];
   s_exercises[next_idx] = temp;
 
-  // Update the temp variables so the screen shows the correct reps/weight for the new exercise!
-  Exercise *new_ex = &s_exercises[s_curr_ex_idx]; 
+  Exercise *new_ex = &s_exercises[s_curr_ex_idx];
   s_temp_reps = new_ex->target_reps;
   
   int active_weight = new_ex->target_weight;
@@ -1225,8 +1340,40 @@ static void skip_exercise() {
   update_workout_ui(true);
 }
 
+static void perform_true_skip() {
+  if (s_curr_ex_idx + 1 < s_total_exercises) {
+     s_curr_ex_idx++;
+     Exercise *new_ex = &s_exercises[s_curr_ex_idx];
+     s_temp_reps = new_ex->target_reps;
+     s_temp_weight = new_ex->target_weight;
+     
+     if (new_ex->modifier == 1 && (new_ex->current_set % 2 == 0)) {
+         s_temp_weight = (s_temp_weight * (100 - s_drop_set_pct)) / 100;
+     }
+     update_workout_ui(true);
+  }
+}
+
+static void execute_shortcut(int action_idx) {
+  if (s_is_resting) return; 
+  switch (action_idx) {
+    case 0: 
+      push_variation_window(); 
+      break;
+    case 1: 
+      if (s_exercises[s_curr_ex_idx].comment[0] != '\0') window_stack_push(s_note_window, true);
+      else vibes_short_pulse(); 
+      break;
+    case 2: 
+      skip_exercise(); 
+      break;
+    case 3: 
+      perform_true_skip(); 
+      break;
+  }
+}
+
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  // NEW: Only increment the workout duration if we aren't paused
   if (!s_is_paused) {
       s_workout_sec++;
   }
@@ -1243,27 +1390,33 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     else strftime(clock_buf, sizeof(clock_buf), "%I:%M", tick_time);
     text_layer_set_text(s_clock_layer, clock_buf);
     s_last_minute = tick_time->tm_min;
-    // V4.0 NEW: Silently capture HR data once per minute
     #if defined(PBL_HEALTH)
-      HealthValue current_hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-      if (current_hr > 0) {
-        if (current_hr > s_peak_hr) s_peak_hr = current_hr;
-        s_total_hr += current_hr;
-        s_hr_samples++;
+      HealthServiceAccessibilityMask hr_mask = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+      if (hr_mask & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue current_hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        if (current_hr > 0) {
+          if (current_hr > s_peak_hr) s_peak_hr = current_hr;
+          s_total_hr += current_hr;
+          s_hr_samples++;
+        }
       }
     #endif
   }
 
   #if !defined(PBL_ROUND)
-    HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    static char hr_buf[16];
-    if (hr > 0) snprintf(hr_buf, sizeof(hr_buf), "%lu BPM", (uint32_t)hr);
-    else snprintf(hr_buf, sizeof(hr_buf), "-- BPM");
-    text_layer_set_text(s_hr_layer, hr_buf);
+    #if defined(PBL_HEALTH)
+      HealthServiceAccessibilityMask hr_mask_display = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+      if (hr_mask_display & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        static char hr_buf[16];
+        if (hr > 0) snprintf(hr_buf, sizeof(hr_buf), "%lu BPM", (uint32_t)hr);
+        else snprintf(hr_buf, sizeof(hr_buf), "-- BPM");
+        text_layer_set_text(s_hr_layer, hr_buf);
+      }
+    #endif
   #endif
 
   if (s_is_resting) {
-    // NEW: Only decrement the rest timer if we aren't paused
     if (!s_is_paused) {
         s_rest_seconds_remaining--;
     }
@@ -1278,11 +1431,104 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   }
 }
 
+// --- V5.0 NOTE WINDOW LOGIC ---
+static void note_window_load(Window *window) {
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+
+  s_note_text_layer = text_layer_create(GRect(5, 30, bounds.size.w - 10, bounds.size.h - 30));
+  text_layer_set_font(s_note_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_note_text_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_note_text_layer, s_exercises[s_curr_ex_idx].comment);
+  
+  text_layer_set_background_color(s_note_text_layer, GColorClear);
+  text_layer_set_text_color(s_note_text_layer, PBL_IF_COLOR_ELSE(is_dark_theme() ? GColorWhite : GColorBlack, GColorBlack));
+  window_set_background_color(window, PBL_IF_COLOR_ELSE(is_dark_theme() ? GColorBlack : GColorWhite, GColorWhite));
+  
+  layer_add_child(window_layer, text_layer_get_layer(s_note_text_layer));
+}
+
+static void note_window_unload(Window *window) {
+  text_layer_destroy(s_note_text_layer);
+}
+
+// --- V5.0 MEGA MENU LOGIC ---
+static void menu_var_callback(int index, void *ctx) {
+  push_variation_window(); 
+}
+
+static void menu_note_callback(int index, void *ctx) {
+  if (s_exercises[s_curr_ex_idx].comment[0] != '\0') {
+    window_stack_push(s_note_window, true);
+  } else {
+    vibes_short_pulse(); 
+  }
+}
+
+static void menu_swap_callback(int index, void *ctx) {
+  skip_exercise(); 
+  window_stack_pop(true);
+}
+
+static void menu_skip_callback(int index, void *ctx) {
+  perform_true_skip();
+  window_stack_pop(true);
+}
+
+static void mega_window_load(Window *window) {
+  int num_items = 0;
+
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Variations",
+    .subtitle = "Add a variation",
+    .callback = menu_var_callback,
+  };
+
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "View Note",
+    .subtitle = s_exercises[s_curr_ex_idx].comment[0] != '\0' ? s_exercises[s_curr_ex_idx].comment : "No note attached",
+    .callback = menu_note_callback,
+  };
+
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Do Later (Swap)",
+    .subtitle = "Swap with next exercise",
+    .callback = menu_swap_callback,
+  };
+
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Skip Entirely",
+    .subtitle = "Skip to next exercise",
+    .callback = menu_skip_callback,
+  };
+
+  s_mega_menu_sections[0] = (SimpleMenuSection) {
+    .num_items = num_items,
+    .items = s_mega_menu_items,
+  };
+
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_frame(window_layer);
+
+  s_mega_menu_layer = simple_menu_layer_create(bounds, window, s_mega_menu_sections, 1, NULL);
+
+  MenuLayer *internal_menu = simple_menu_layer_get_menu_layer(s_mega_menu_layer);
+  menu_layer_set_normal_colors(internal_menu, get_bg_color(), get_text_color()); 
+  menu_layer_set_highlight_colors(internal_menu, get_theme_color(), get_bg_color());
+
+  layer_add_child(window_layer, simple_menu_layer_get_layer(s_mega_menu_layer));
+}
+
+static void mega_window_unload(Window *window) {
+  simple_menu_layer_destroy(s_mega_menu_layer);
+}
+
 static void wo_up_click(ClickRecognizerRef recognizer, void *context) {
   if (s_is_resting) return; 
   if (s_edit_mode == 0) s_temp_reps++; else s_temp_weight++;
   update_workout_ui(false);
 }
+
 static void wo_down_click(ClickRecognizerRef recognizer, void *context) {
   if (s_is_resting) return;
   if (s_edit_mode == 0 && s_temp_reps > 0) s_temp_reps--; 
@@ -1290,13 +1536,22 @@ static void wo_down_click(ClickRecognizerRef recognizer, void *context) {
   update_workout_ui(false);
 }
 
+static void wo_up_long_click(ClickRecognizerRef recognizer, void *context) {
+  execute_shortcut(s_shortcut_up);
+}
+
 static void wo_down_long_click(ClickRecognizerRef recognizer, void *context) {
-  skip_exercise();
+  execute_shortcut(s_shortcut_down);
 }
 
 static void wo_select_short_click(ClickRecognizerRef recognizer, void *context) {
   if (s_is_resting) { skip_rest(); return; }
-  s_edit_mode = !s_edit_mode; 
+  
+  if (s_exercises[s_curr_ex_idx].modifier == 4) {
+      s_edit_mode = 0; 
+  } else {
+      s_edit_mode = !s_edit_mode; 
+  }
   update_workout_ui(true);
 }
 
@@ -1307,27 +1562,23 @@ static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
   ex->actual_reps[ex->current_set - 1] = s_temp_reps;
   ex->actual_weight[ex->current_set - 1] = s_temp_weight;
 
-  // Identify our position in a potential Superset couple
   bool is_first_half = (ex->modifier == 2 && s_curr_ex_idx + 1 < s_total_exercises);
   bool is_second_half = (s_curr_ex_idx > 0 && s_exercises[s_curr_ex_idx - 1].modifier == 2);
 
   if (is_first_half) {
-    // Finished Exercise A: Jump to Exercise B immediately!
     s_curr_ex_idx++;
-    s_exercises[s_curr_ex_idx].current_set = ex->current_set; // Keep their sets perfectly synced
+    s_exercises[s_curr_ex_idx].current_set = ex->current_set; 
     s_rest_seconds_remaining = s_super_rest_sec;
     play_vibe(s_set_vibe);
     
   } else if (is_second_half) {
-    // Finished Exercise B: Check if we need to bounce back to Exercise A
     if (ex->current_set < ex->target_sets) {
       ex->current_set++;
       s_exercises[s_curr_ex_idx - 1].current_set++; 
-      s_curr_ex_idx--; // BOUNCE BACK!
-      s_rest_seconds_remaining = s_set_rest_sec; // Standard rest after completing the couple
+      s_curr_ex_idx--; 
+      s_rest_seconds_remaining = s_set_rest_sec; 
       play_vibe(s_set_vibe);
     } else {
-      // Superset completely finished! Move on to Exercise C.
       s_curr_ex_idx++; 
       if (s_curr_ex_idx < s_total_exercises) {
         s_exercises[s_curr_ex_idx].current_set = 1;
@@ -1342,13 +1593,13 @@ static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
     }
     
   } else {
-    // NORMAL EXERCISE LOGIC (No Superset)
     if (ex->current_set < ex->target_sets) {
       ex->current_set++;
       
-      // NEW: Check if the set we are ENTERING is the drop set (even number)
       if (ex->modifier == 1 && (ex->current_set % 2 == 0)) {
           s_rest_seconds_remaining = s_drop_rest_sec;
+      } else if (ex->modifier == 3) {
+          s_rest_seconds_remaining = s_set_rest_sec / 2; 
       } else {
           s_rest_seconds_remaining = s_set_rest_sec; 
       }
@@ -1369,7 +1620,6 @@ static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
     }
   }
 
-  // Safely grab the newly selected exercise to pre-fill the screen variables
   Exercise *next_ex = &s_exercises[s_curr_ex_idx]; 
   s_temp_reps = next_ex->target_reps;
   
@@ -1383,14 +1633,16 @@ static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
   
   if (s_rest_seconds_remaining > 0) {
     s_is_resting = true;
-    set_rest_overlay_state(true, true); // Slides the rest timer UP!
+    set_rest_overlay_state(true, true); 
   }
   update_workout_ui(false); 
 }
 
 static void wo_select_double_click(ClickRecognizerRef recognizer, void *context) {
   if (s_is_resting) return;
-  push_variation_window();
+  window_set_background_color(s_mega_window, get_bg_color()); 
+  
+  window_stack_push(s_mega_window, true);
 }
 
 static void wo_back_click(ClickRecognizerRef recognizer, void *context) {
@@ -1401,6 +1653,7 @@ static void wo_back_click(ClickRecognizerRef recognizer, void *context) {
 static void wo_click_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_UP, wo_up_click);
   window_single_click_subscribe(BUTTON_ID_DOWN, wo_down_click);
+  window_long_click_subscribe(BUTTON_ID_UP, s_long_press_ms, wo_up_long_click, NULL);
   window_long_click_subscribe(BUTTON_ID_DOWN, s_long_press_ms, wo_down_long_click, NULL);
   window_single_click_subscribe(BUTTON_ID_SELECT, wo_select_short_click);
   window_multi_click_subscribe(BUTTON_ID_SELECT, 2, 2, 300, true, wo_select_double_click); 
@@ -1418,9 +1671,7 @@ static void workout_window_load(Window *window) {
   int offset_x = 0; 
 
   #if defined(PBL_ROUND)
-    // PIXEL-PERFECT ROUND SCALING
     if (bounds.size.h <= 180) { 
-      // CHALK (180x180)
       s_line1_y = 46;  
       s_line2_y = 140; 
       
@@ -1429,12 +1680,10 @@ static void workout_window_load(Window *window) {
       
       set_y  = s_line1_y + 1;
       
-      // ADJUSTED: Squeezed the vertical padding between the labels, numbers, and targets!
       s_labels_y = s_line1_y + 23;  
-      s_actual_y = s_labels_y + 12; // Tighter padding (was 16)
-      s_target_y = s_actual_y + 28; // Tighter padding (was 32)
+      s_actual_y = s_labels_y + 12; 
+      s_target_y = s_actual_y + 28; 
     } else { 
-      // GABBRO (260x260)
       s_line1_y = 75;  
       s_line2_y = 205; 
       top_margin = 25; 
@@ -1446,7 +1695,6 @@ static void workout_window_load(Window *window) {
       s_target_y = s_actual_y + 42;
     }
   #else
-    // STANDARD RECTANGULAR SCALING
     s_line1_y = is_tall ? 60 : 48; 
     s_line2_y = is_tall ? 195 : 144;
     top_margin = is_tall ? 10 : 0;
@@ -1458,27 +1706,22 @@ static void workout_window_load(Window *window) {
     s_target_y = s_actual_y + (is_tall ? 36 : 30);
   #endif
 
-  // Draw Background Lines First
   s_workout_bg_layer = layer_create(bounds);
   layer_set_update_proc(s_workout_bg_layer, workout_bg_update_proc);
   layer_add_child(w_layer, s_workout_bg_layer);
 
-  // V4.0 NEW: Add the Highlight Animation Layer
   s_highlight_layer = layer_create(GRect(0,0,0,0)); 
   layer_set_update_proc(s_highlight_layer, highlight_update_proc);
   layer_add_child(w_layer, s_highlight_layer);
 
-  // BUILD TEXT LAYERS
   #if defined(PBL_ROUND)
     if (bounds.size.h <= 180) { 
-      // CHALK
       s_exercise_layer = build_text_layer(GRect(10, top_margin, bounds.size.w - 20, 32), FONT_KEY_GOTHIC_18_BOLD, PBL_IF_COLOR_ELSE(GColorCobaltBlue, GColorBlack), GTextAlignmentCenter, w_layer);
-      s_next_exercise_layer = build_text_layer(GRect(0, 0, 0, 0), FONT_KEY_GOTHIC_14, GColorClear, GTextAlignmentCenter, w_layer); // Hidden
+      s_next_exercise_layer = build_text_layer(GRect(0, 0, 0, 0), FONT_KEY_GOTHIC_14, GColorClear, GTextAlignmentCenter, w_layer); 
       
       s_timer_layer = build_text_layer(GRect(10, s_line2_y + 2, 75, 24), FONT_KEY_GOTHIC_18_BOLD, GColorBlack, GTextAlignmentRight, w_layer);
       s_clock_layer = build_text_layer(GRect(95, s_line2_y + 2, 75, 24), FONT_KEY_GOTHIC_18_BOLD, GColorBlack, GTextAlignmentLeft, w_layer); 
     } else { 
-      // GABBRO
       s_next_exercise_layer = build_text_layer(GRect(10, top_margin, bounds.size.w - 20, 20), FONT_KEY_GOTHIC_14, GColorBlack, GTextAlignmentCenter, w_layer);
       s_exercise_layer = build_text_layer(GRect(10, top_margin + 17, bounds.size.w - 20, 32), FONT_KEY_GOTHIC_24_BOLD, PBL_IF_COLOR_ELSE(GColorCobaltBlue, GColorBlack), GTextAlignmentCenter, w_layer);
       
@@ -1486,13 +1729,13 @@ static void workout_window_load(Window *window) {
       s_clock_layer = build_text_layer(GRect(135, s_line2_y + 5, 105, 28), FONT_KEY_GOTHIC_24_BOLD, GColorBlack, GTextAlignmentLeft, w_layer);
     }
   #else
-    if (is_tall) { // TALL RECTANGLE
+    if (is_tall) { 
       s_exercise_layer = build_text_layer(GRect(5, top_margin, bounds.size.w - 10, 32), FONT_KEY_GOTHIC_28_BOLD, PBL_IF_COLOR_ELSE(GColorCobaltBlue, GColorBlack), GTextAlignmentLeft, w_layer);
       s_next_exercise_layer = build_text_layer(GRect(5, top_margin + 28, bounds.size.w - 10, 20), FONT_KEY_GOTHIC_14, GColorBlack, GTextAlignmentLeft, w_layer);
       s_hr_layer = build_text_layer(GRect(5, s_line2_y + 5, 70, 24), FONT_KEY_GOTHIC_18_BOLD, PBL_IF_COLOR_ELSE(GColorRed, GColorBlack), GTextAlignmentLeft, w_layer);
       s_timer_layer = build_text_layer(GRect(75, s_line2_y + 5, 50, 24), FONT_KEY_GOTHIC_18_BOLD, GColorBlack, GTextAlignmentCenter, w_layer);
       s_clock_layer = build_text_layer(GRect(125, s_line2_y + 5, 70, 24), FONT_KEY_GOTHIC_18_BOLD, GColorBlack, GTextAlignmentRight, w_layer);
-    } else { // SHORT RECTANGLE
+    } else { 
       s_exercise_layer = build_text_layer(GRect(2, 6, bounds.size.w - 4, 28), FONT_KEY_GOTHIC_24_BOLD, GColorBlack, GTextAlignmentLeft, w_layer);
       s_next_exercise_layer = build_text_layer(GRect(2, 28, bounds.size.w - 4, 20), FONT_KEY_GOTHIC_14, GColorBlack, GTextAlignmentLeft, w_layer);
       s_hr_layer = build_text_layer(GRect(2, s_line2_y + 4, 52, 20), FONT_KEY_GOTHIC_14_BOLD, GColorBlack, GTextAlignmentLeft, w_layer);
@@ -1510,7 +1753,6 @@ static void workout_window_load(Window *window) {
   s_target_reps_layer = build_text_layer(GRect(offset_x, s_target_y, half_w, 22), FONT_KEY_GOTHIC_18, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack), GTextAlignmentCenter, w_layer);
   s_target_weight_layer = build_text_layer(GRect(half_w - offset_x, s_target_y, half_w, 22), FONT_KEY_GOTHIC_18, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack), GTextAlignmentCenter, w_layer);
 
-  // Setup Rest Overlay
   int rest_box_height = s_line2_y - s_line1_y;
   s_rest_overlay_layer = layer_create(GRect(0, s_line1_y, bounds.size.w, rest_box_height));
   layer_set_update_proc(s_rest_overlay_layer, rest_bg_update_proc);
@@ -1518,15 +1760,11 @@ static void workout_window_load(Window *window) {
   #if defined(PBL_ROUND)
     int r_title_y, r_time_y, r_skip_y;
     if (bounds.size.h <= 180) { 
-      // CHALK
       r_title_y = (rest_box_height * 5) / 100;
       r_time_y  = (rest_box_height * 30) / 100;
       r_skip_y  = (rest_box_height * 75) / 100;
     } else { 
-      // GABBRO
-      r_title_y = 10;
-      r_time_y  = 45;
-      r_skip_y  = 105;
+      r_title_y = 10; r_time_y  = 45; r_skip_y  = 105;
     }
   #else
     int r_title_y = is_tall ? 10 : 5;
@@ -1542,7 +1780,6 @@ static void workout_window_load(Window *window) {
   
   layer_add_child(w_layer, s_rest_overlay_layer);
 
-  // Add the Progress Layer LAST so it draws strictly on top
   #if defined(PBL_ROUND)
     s_progress_layer = layer_create(bounds);
   #else
@@ -1554,8 +1791,7 @@ static void workout_window_load(Window *window) {
   s_edit_mode = 0; 
   if (s_rest_seconds_remaining > 0) {
     s_is_resting = true;
-    set_rest_overlay_state(s_is_resting, false);
-    update_workout_ui(false);
+    set_rest_overlay_state(true, false);
   } else {
     s_is_resting = false;
     layer_set_hidden(s_rest_overlay_layer, true);
@@ -1567,6 +1803,16 @@ static void workout_window_load(Window *window) {
 
 static void workout_window_unload(Window *window) {
   tick_timer_service_unsubscribe();
+
+  if (s_box_anim) {
+      animation_unschedule(s_box_anim);
+      s_box_anim = NULL;
+  }
+  if (s_rest_anim) {
+      animation_unschedule(s_rest_anim);
+      s_rest_anim = NULL;
+  }
+
   layer_destroy(s_progress_layer);
   layer_destroy(s_workout_bg_layer);
   
@@ -1594,22 +1840,21 @@ static void workout_window_unload(Window *window) {
 // --- MAIN MENU WINDOW LOGIC ---
 static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
   int rows = s_active_slots;
-  if (s_has_resume) rows++; // Add 1 row for the Resume button
+  if (s_has_resume) rows++; 
   if (s_active_slots < MAX_SLOTS) rows++;
-  rows++; // Settings
+  rows++; 
   return rows;
 }
 
 static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
   int i = cell_index->row;
   
-  // NEW: Inject Resume button at the top
   if (s_has_resume) {
     if (i == 0) {
       menu_cell_basic_draw(ctx, cell_layer, "Resume Workout", "Continue where you left off", NULL);
       return;
     }
-    i--; // Shift index down for the rest of the list
+    i--; 
   }
   
   if (i < s_active_slots) {
@@ -1626,7 +1871,6 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
 static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
   int i = cell_index->row;
   
-  // Handle Resume Click
   if (s_has_resume) {
     if (i == 0) {
       ActiveState state;
@@ -1636,7 +1880,6 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
       s_curr_ex_idx = state.curr_ex_idx;
       s_workout_sec = state.workout_sec;
       s_current_slot = state.current_slot;
-      // NEW: Load the HR snapshot
       s_peak_hr = state.peak_hr;
       s_total_hr = state.total_hr;
       s_hr_samples = state.hr_samples;
@@ -1653,7 +1896,6 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
       s_is_resting = false;
       s_rest_seconds_remaining = 0;
       
-      // NEW: Accurately pre-fill the screen variables for the exact exercise we resumed!
       s_temp_reps = s_exercises[s_curr_ex_idx].target_reps;
       int active_weight = s_exercises[s_curr_ex_idx].target_weight;
       if (s_exercises[s_curr_ex_idx].modifier == 1 && (s_exercises[s_curr_ex_idx].current_set % 2 == 0)) {
@@ -1665,16 +1907,23 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
       push_workout_window();
       return;
     }
-    i--; // Shift index down
+    i--; 
   }
   
   if (i < s_active_slots) {
     s_current_slot = i; 
-    char saved_data[256];
-    persist_read_string(STORAGE_KEY_BASE + i, saved_data, sizeof(saved_data));
-    parse_routine_string(saved_data);
     
-    // NEW: Hard-reset all workout state variables ONLY for brand new workouts!
+    RoutineHeader header;
+    persist_read_data(STORAGE_KEY_BASE + i, &header, sizeof(RoutineHeader));
+    snprintf(s_routine_name, sizeof(s_routine_name), "%s", header.name);
+    s_total_exercises = header.total_exercises;
+    
+    s_total_workout_sets = 0;
+    for (int j = 0; j < s_total_exercises; j++) {
+        persist_read_data(ROUTINE_EX_BASE + (i * MAX_EXERCISES) + j, &s_exercises[j], sizeof(Exercise));
+        s_total_workout_sets += s_exercises[j].target_sets;
+    }
+    
     s_curr_ex_idx = 0;
     s_workout_sec = 0;
     s_peak_hr = 0;
@@ -1697,7 +1946,7 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
 static void menu_select_long_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
   int i = cell_index->row;
   if (s_has_resume) {
-      if (i == 0) return; // Cannot edit the Resume button
+      if (i == 0) return; 
       i--;
   }
   if (i < s_active_slots) {
@@ -1711,31 +1960,24 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   Tuple *routine_data_tuple = dict_find(iterator, MESSAGE_KEY_ROUTINE_DATA);
   if (routine_data_tuple && routine_data_tuple->type == TUPLE_CSTRING) {
     char *delimited_string = routine_data_tuple->value->cstring;
-    static char safe_buffer[256]; 
-    snprintf(safe_buffer, sizeof(safe_buffer), "%s", delimited_string);
     
-    // 1. Extract just the routine name from the incoming string
-    char incoming_name[32];
-    int idx = 0;
-    while (delimited_string[idx] != '|' && delimited_string[idx] != '\0' && idx < 31) {
-        incoming_name[idx] = delimited_string[idx];
-        idx++;
-    }
-    incoming_name[idx] = '\0';
+    parse_routine_string(delimited_string);
     
-    // 2. Smart Save: Overwrite if the name matches, otherwise append as new
     int target_slot = s_active_slots; 
     for (int i = 0; i < s_active_slots; i++) {
-        if (strcmp(s_slot_names[i], incoming_name) == 0) {
-            target_slot = i; 
-            break;
-        }
+        if (strcmp(s_slot_names[i], s_routine_name) == 0) { target_slot = i; break; }
     }
-    
-    // 3. Cap at maximum allowed slots
     if (target_slot > MAX_SLOTS - 1) target_slot = MAX_SLOTS - 1; 
     
-    persist_write_string(STORAGE_KEY_BASE + target_slot, safe_buffer);
+    RoutineHeader header;
+    snprintf(header.name, sizeof(header.name), "%s", s_routine_name);
+    header.total_exercises = s_total_exercises;
+    persist_write_data(STORAGE_KEY_BASE + target_slot, &header, sizeof(RoutineHeader));
+    
+    for (int j = 0; j < s_total_exercises; j++) {
+        persist_write_data(ROUTINE_EX_BASE + (target_slot * MAX_EXERCISES) + j, &s_exercises[j], sizeof(Exercise));
+    }
+    
     refresh_directory();
     menu_layer_reload_data(s_menu_layer);
   }
@@ -1776,10 +2018,10 @@ static void main_window_load(Window *window) {
   menu_layer_set_normal_colors(s_menu_layer, get_bg_color(), get_text_color());
   menu_layer_set_highlight_colors(s_menu_layer, get_theme_color(), get_bg_color());
   menu_layer_set_click_config_onto_window(s_menu_layer, window);
-  // NEW: Auto-suggest the next routine in the sequence!
+  
   if (s_active_slots > 0) {
     int next_slot = s_last_routine_slot + 1;
-    if (next_slot >= s_active_slots) next_slot = 0; // Wrap back to the top
+    if (next_slot >= s_active_slots) next_slot = 0; 
     menu_layer_set_selected_index(s_menu_layer, MenuIndex(0, next_slot), MenuRowAlignCenter, false);
   }
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
@@ -1795,21 +2037,30 @@ static void main_window_unload(Window *window) {
 static void init() {
   load_settings(); 
   
+  if (!persist_exists(V5_MIGRATION_KEY)) {
+      for(int i = 0; i < MAX_SLOTS; i++) persist_delete(STORAGE_KEY_BASE + i);
+      persist_write_bool(V5_MIGRATION_KEY, true);
+  }
+  
   if (persist_exists(ACTIVE_STATE_KEY)) s_has_resume = true;
   
   s_main_window = window_create();
   
-  window_set_background_color(s_main_window, get_bg_color()); 
+  s_mega_window = window_create();
+  window_set_window_handlers(s_mega_window, (WindowHandlers) { .load = mega_window_load, .unload = mega_window_unload });
   
+  s_note_window = window_create();
+  window_set_window_handlers(s_note_window, (WindowHandlers) { .load = note_window_load, .unload = note_window_unload });
+  
+  window_set_background_color(s_main_window, get_bg_color()); 
   window_set_window_handlers(s_main_window, (WindowHandlers) { .load = main_window_load, .unload = main_window_unload });
   window_stack_push(s_main_window, true);
   
   app_message_register_inbox_received(inbox_received_callback);
-  app_message_open(256, 1024); 
+  app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum()); 
 }
 
 static void deinit() {
-  // NEW: Save snapshot if exiting mid-workout!
   if (s_workout_active) {
     ActiveState state = {
       .total_exercises = s_total_exercises,
@@ -1817,14 +2068,13 @@ static void deinit() {
       .curr_ex_idx = s_curr_ex_idx,
       .workout_sec = s_workout_sec,
       .current_slot = s_current_slot,
-        .peak_hr = s_peak_hr,       // NEW
-      .total_hr = s_total_hr,     // NEW
-      .hr_samples = s_hr_samples  // NEW
+      .peak_hr = s_peak_hr,       
+      .total_hr = s_total_hr,     
+      .hr_samples = s_hr_samples  
     };
     strncpy(state.routine_name, s_routine_name, sizeof(state.routine_name));
     persist_write_data(ACTIVE_STATE_KEY, &state, sizeof(state));
     
-    // Save each exercise individually to stay under the 256 byte limit
     for(int j = 0; j < s_total_exercises; j++) {
       persist_write_data(ACTIVE_EX_BASE + j, &s_exercises[j], sizeof(Exercise));
     }
@@ -1837,6 +2087,8 @@ static void deinit() {
   if (s_variation_window) { window_destroy(s_variation_window); s_variation_window = NULL; }
   if (s_exit_window) { window_destroy(s_exit_window); s_exit_window = NULL; }
   if (s_sensation_window) { window_destroy(s_sensation_window); s_sensation_window = NULL; }
+  if (s_mega_window) { window_destroy(s_mega_window); s_mega_window = NULL; }
+  if (s_note_window) { window_destroy(s_note_window); s_note_window = NULL; }
   
   window_destroy(s_main_window); 
   s_main_window = NULL;
