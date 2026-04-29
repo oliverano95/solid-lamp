@@ -29,7 +29,6 @@
         .exercise-info { display: flex; align-items: flex-start; flex-grow: 1; min-width: 0; padding-right: 10px; }
         .exercise-details { flex-grow: 1; min-width: 0; }
         .grab-handle { color: #999; margin-right: 10px; font-size: 18px; user-select: none; margin-top: -2px; }
-        .exercise-info strong { word-wrap: break-word; }
         
         .history-item { font-size: 12px; padding: 8px; border-bottom: 1px solid #eee; }
         .history-item:last-child { border-bottom: none; }
@@ -40,136 +39,181 @@
         .badge-drop { background-color: #e83e8c; }
         .badge-super { background-color: #007bff; }
         .badge-super-2 { background-color: #17a2b8; } 
+		.badge-warmup { background-color: #ffc107; color: #212529; } /* NEW */
+        .badge-bodyweight { background-color: #28a745; } /* NEW */
         
         .superset-link { border-left: 4px solid #007bff; background-color: #f4f9ff; }
         .superset-link-top { border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
         .superset-link-bottom { border-top-left-radius: 0; border-top-right-radius: 0; border-top: 1px dashed #b8daff; }
         
         .modifier-desc { font-size: 12px; color: #555; background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 0px; margin-bottom: 10px; border-left: 3px solid #ccc; line-height: 1.4;}
+
+        /* V5.0 TAB STYLES */
+        .tab-container { display: flex; border-bottom: 2px solid #FF4700; margin-bottom: 20px; }
+        .tab-btn { flex: 1; background: #ddd; border: none; padding: 12px 5px; font-weight: bold; cursor: pointer; color: #555; transition: 0.2s; border-radius: 8px 8px 0 0; margin-right: 2px; font-size: 13px; }
+        .tab-btn:last-child { margin-right: 0; }
+        .tab-btn.active { background: #FF4700; color: white; }
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <h2>Gym Routine Setup</h2>
+    <h2 style="text-align: center; margin-top: 0;">GymTracker Setup</h2>
 
-    <div class="card" style="border: 2px solid #FF4700;">
-        <h3 style="margin-top: 0; color: #FF4700;">Workout History</h3>
-        <p style="font-size: 12px; color: gray; margin-top: 0;">Workouts are saved locally to your phone. Download them here.</p>
-        
-        <div id="historyList" style="max-height: 150px; overflow-y: auto; background: #fafafa; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; padding: 5px;">
-            <p style="font-size: 12px; text-align: center; color: gray;">Loading history...</p>
-        </div>
-        
-        <div class="flex-row">
-            <button onclick="downloadCSV()">Download CSV</button>
-            <button class="secondary-btn delete-btn" onclick="clearHistory()">Clear History</button>
-        </div>
+    <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab(event, 'tab-builder')">🏋️ Builder</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-progression')">📈 Progression</button>
+		<button class="tab-btn" onclick="switchTab(event, 'tab-history')">📜 History</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-cloud')">☁️ Cloud Sync</button>
     </div>
 
-    <div class="card">
-        <h3 style="margin-top: 0;">Manage Routine Files</h3>
-        <div class="flex-row">
-            <button class="secondary-btn" onclick="document.getElementById('importFile').click()">Load (File)</button>
-            <button class="secondary-btn" onclick="exportJSON()">Save (File)</button>
-        </div>
-        <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importJSON(event)">
-        
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
-        
-        <h4 style="margin-top: 0;">Mobile Import / Export</h4>
-        <p style="font-size: 12px; color: gray; margin-top: 0;">If you are inside the Pebble app, use this text box to copy and paste routines instead of using files.</p>
-        
-        <textarea id="routineTextArea" rows="3" style="font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"n":"My Routine","e":[...]}'></textarea>
-        
-        <div class="flex-row">
-            <button type="button" class="small-btn secondary-btn" style="margin: 0; flex: 1;" onclick="exportToText()">1. Generate Text</button>
-            <button type="button" class="small-btn secondary-btn" style="margin: 0; flex: 1;" onclick="copyText()">2. Copy Text</button>
-        </div>
-        <button type="button" class="small-btn" style="margin: 10px 0 0 0; width: 100%; background-color: #28a745;" onclick="importFromText()">⬇️ Import Pasted Text</button>
-    </div>
+    <div id="tab-builder" class="tab-content active">
+        <div class="card">
+            <h3 style="margin-top: 0;">Manage Routine Files</h3>
+            <div class="flex-row">
+                <button class="secondary-btn" onclick="document.getElementById('importFile').click()">Load (File)</button>
+                <button class="secondary-btn" onclick="exportJSON()">Save (File)</button>
+            </div>
+            <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importJSON(event)">
+            
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+            
+            <h4 style="margin-top: 0;">Mobile Import / Export</h4>
 
-    <div class="card">
-        <label>Routine Name:</label>
-        <input type="text" id="routineName" placeholder="e.g., Push Day, Leg Day">
-    </div>
-
-    <div class="card">
-        <h3 id="formTitle">Add Exercise</h3>
-        
-        <input type="text" id="exerciseSearch" placeholder="🔍 Search exercises..." onkeyup="filterExercises()">
-        <select id="exerciseSelect"></select>
-        
-        <input type="number" id="targetSets" placeholder="Target Sets (e.g., 3)">
-        <input type="number" id="targetReps" placeholder="Target Reps (e.g., 10)">
-        <input type="number" id="targetWeight" placeholder="Target Weight in kg (e.g., 60)">
-        
-        <label style="font-size: 14px; font-weight: bold; margin-top: 5px; display: block;">Advanced Modifier:</label>
-        
-        <select id="exerciseModifier" onchange="updateModifierDesc()">
-            <option value="0">Normal Sets</option>
-            <option value="1">Drop Set</option>
-            <option value="2">Superset</option>
-        </select>
-        
-        <div id="modifierDesc" class="modifier-desc">
-            Standard exercise execution with regular rest periods.
+			<div id="syncContainer" style="display: none; background: #e8f4f8; padding: 10px; border: 1px solid #b8daff; border-radius: 4px; margin-bottom: 15px;">
+                <label style="font-size: 12px; font-weight: bold; color: #004085;">📥 Watch Auto-Progression Sync:</label>
+                <div class="flex-row" style="margin-top: 5px;">
+                    <select id="syncSelect" style="margin: 0;"></select>
+                    <button type="button" class="small-btn" style="background-color: #007bff; margin: 0; white-space: nowrap;" onclick="loadSyncedRoutine()">Load</button>
+                    <button type="button" class="small-btn delete-btn" style="margin: 0; white-space: nowrap;" onclick="deleteSyncedRoutine()">Delete</button>
+                </div>
+                <p style="font-size: 10px; margin: 5px 0 0 0; color: #004085;">Loads updated targets from your last completed watch workout.</p>
+            </div>
+			
+            <p style="font-size: 12px; color: gray; margin-top: 0;">If you are inside the Pebble app, use this text box to copy and paste routines instead of using files.</p>
+            
+            <textarea id="routineTextArea" rows="3" style="font-family: monospace; font-size: 11px; resize: vertical;" placeholder='{"n":"My Routine","e":[...]}'></textarea>
+            
+            <div class="flex-row">
+                <button type="button" class="small-btn secondary-btn" style="margin: 0; flex: 1;" onclick="exportToText()">1. Generate Text</button>
+                <button type="button" class="small-btn secondary-btn" style="margin: 0; flex: 1;" onclick="copyText()">2. Copy Text</button>
+            </div>
+            <button type="button" class="small-btn" style="margin: 10px 0 0 0; width: 100%; background-color: #28a745;" onclick="importFromText()">⬇️ Import Pasted Text</button>
         </div>
-        
-        <button id="addUpdateBtn" onclick="addExercise()">+ Add to Routine</button>
-    </div>
 
-    <div class="card">
-        <h3>Your Routine:</h3>
-        <p style="font-size: 11px; color: gray; margin-top: 0;">Drag and drop items to reorder them, or use the arrows on mobile.</p>
-        <div id="routineList">
-            <p id="emptyMessage" style="color: gray; font-size: 12px;">No exercises added yet.</p>
+        <div class="card">
+            <label>Routine Name:</label>
+            <input type="text" id="routineName" placeholder="e.g., Push Day, Leg Day">
         </div>
-    </div>
 
-    <div class="card">
-        <h3>Progression Settings</h3>
-        <label>Mode:</label>
-        <select id="progressionMode" onchange="toggleWeightIncrement()">
-            <option value="-1" selected>Off (no progression)</option>
-            <option value="0">Weight (increase target weight)</option>
-            <option value="1">Reps (increase target reps)</option>
-        </select>
-        
-        <div id="weightIncrementContainer" style="display:none;">
-            <label>Weight Increment:</label>
-            <select id="weightIncrement">
-                <option value="1">1kg</option>
-                <option value="2" selected>2kg</option>
-                <option value="3">3g</option>
-                <option value="4">4g</option>
-                <option value="5">5g</option>
-                <option value="6">6kg</option>
-                <option value="7">7kg</option>
-                <option value="8">8kg</option>
-                <option value="9">9kg</option>
-                <option value="10">10kg</option>
+        <div class="card">
+            <h3 id="formTitle">Add Exercise</h3>
+            
+            <input type="text" id="exerciseSearch" placeholder="🔍 Search exercises..." onkeyup="filterExercises()">
+            <select id="exerciseSelect"></select>
+            
+            <input type="number" id="targetSets" placeholder="Target Sets (e.g., 3)">
+            <input type="number" id="targetReps" placeholder="Target Reps (e.g., 10)">
+            <input type="number" id="targetWeight" placeholder="Target Weight in kg (e.g., 60)">
+            
+            <label style="font-size: 14px; font-weight: bold; margin-top: 5px; display: block;">Advanced Modifier:</label>
+            
+            <select id="exerciseModifier" onchange="updateModifierDesc()">
+                <option value="0">Normal Sets</option>
+                <option value="1">Drop Set</option>
+                <option value="2">Superset</option>
+				<option value="3">Warmup</option>
+                <option value="4">Bodyweight</option>
             </select>
-        </div>
-        <p style="font-size: 11px; color:gray; margin-top:10px;">When you meet or exceed your targets, the app will automatically increase them for your next workout.</p>
-    </div>
+            
+            <div id="modifierDesc" class="modifier-desc">
+                Standard exercise execution with regular rest periods.
+            </div>
 
-    <div class="card">
-        <h3>Optional: Google Sheets Auto-Export</h3>
-        
-        <div id="googleStatusContainer" style="display: none; padding: 10px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 4px; margin-bottom: 15px;">
-            <span style="color: #2e7d32; font-weight: bold;">✅ Cloud Sync Configured</span>
-            <p style="font-size: 11px; margin: 5px 0 0 0; color: #1b5e20;">Your URL and password are securely saved on your phone. Leave the fields below blank to keep your current settings, or enter new ones to overwrite.</p>
-            <button type="button" class="small-btn delete-btn" style="margin-top: 8px;" onclick="flagClearGoogle()">Wipe Saved Credentials</button>
+			<label style="font-size: 14px; font-weight: bold; margin-top: 5px; display: block;">Optional Note:</label>
+			<input type="text" id="exerciseComment" placeholder="e.g., Seat at 4, Pin at 3" maxlength="31">
+			
+            <button id="addUpdateBtn" onclick="addExercise()">+ Add to Routine</button>
         </div>
 
-        <p style="font-size: 12px; color: gray; margin-top: 0;">Advanced users: Paste your Apps Script URL here to auto-sync workouts to the cloud in the background.</p>
-        <label>Google Script URL:</label>
-        <input type="text" id="googleUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
-        <label>Export Password:</label>
-        <input type="password" id="googlePwdInput" placeholder="Your secret password">
+        <div class="card">
+            <h3>Your Routine:</h3>
+            <p style="font-size: 11px; color: gray; margin-top: 0;">Drag and drop items to reorder them, or use the arrows on mobile.</p>
+            <div id="routineList">
+                <p id="emptyMessage" style="color: gray; font-size: 12px;">No exercises added yet.</p>
+            </div>
+        </div>
     </div>
 
-    <button onclick="saveAndSend()" style="padding: 15px; font-size: 18px;">Save & Send to Pebble</button>
+    <div id="tab-progression" class="tab-content">
+        <div class="card">
+            <h3 style="margin-top: 0;">Progression Settings</h3>
+            <label>Mode:</label>
+            <select id="progressionMode" onchange="updateProgressionUI()">
+                <option value="-1" selected>Off</option>
+                <option value="0">Weight</option>
+                <option value="1">Reps</option>
+            </select>
+            
+            <div id="weightIncrementContainer" style="display:none;">
+                <label>Weight Increment:</label>
+                <select id="weightIncrement">
+                    <option value="1">1kg</option>
+                    <option value="2" selected>2kg</option>
+                    <option value="3">3kg</option>
+                    <option value="4">4kg</option>
+                    <option value="5">5kg</option>
+                    <option value="6">6kg</option>
+                    <option value="7">7kg</option>
+                    <option value="8">8kg</option>
+                    <option value="9">9kg</option>
+                    <option value="10">10kg</option>
+                </select>
+            </div>
+            
+            <div id="progressionDesc" class="modifier-desc" style="margin-top: 15px;">
+                Progression is disabled. Your targets will remain exactly as you set them.
+            </div>
+        </div>
+    </div>
+	
+	<div id="tab-history" class="tab-content">
+        <div class="card">
+            <h3 style="margin-top: 0;">Workout History</h3>
+            <p style="font-size: 12px; color: gray; margin-top: 0;">Workouts are saved locally to your phone. Download them here.</p>
+            
+            <div id="historyList" style="max-height: 250px; overflow-y: auto; background: #fafafa; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; padding: 5px;">
+                <p style="font-size: 12px; text-align: center; color: gray;">Loading history...</p>
+            </div>
+            
+            <div class="flex-row">
+                <button onclick="downloadCSV()">Download CSV</button>
+                <button class="secondary-btn delete-btn" onclick="clearHistory()">Clear History</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-cloud" class="tab-content">
+        <div class="card">
+            <h3 style="margin-top: 0;">Google Sheets Auto-Export</h3>
+            
+            <div id="googleStatusContainer" style="display: none; padding: 10px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 4px; margin-bottom: 15px;">
+                <span style="color: #2e7d32; font-weight: bold;">✅ Cloud Sync Configured</span>
+                <p style="font-size: 11px; margin: 5px 0 0 0; color: #1b5e20;">Your URL and password are securely saved on your phone. Leave the fields below blank to keep your current settings, or enter new ones to overwrite.</p>
+                <button type="button" class="small-btn delete-btn" style="margin-top: 8px;" onclick="flagClearGoogle()">Wipe Saved Credentials</button>
+            </div>
+
+            <p style="font-size: 12px; color: gray; margin-top: 0;">Advanced users: Paste your Apps Script URL here to auto-sync workouts to the cloud in the background.</p>
+            <label>Google Script URL:</label>
+            <input type="text" id="googleUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+            <label>Export Password:</label>
+            <input type="password" id="googlePwdInput" placeholder="Your secret password">
+        </div>
+    </div>
+
+    <button onclick="saveAndSend()" style="padding: 15px; font-size: 18px; margin-bottom: 40px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">Save & Send to Pebble</button>
 
     <script>
         const exerciseDatabase = {
@@ -188,6 +232,23 @@
         let shouldClearHistory = false;
         let shouldClearGoogle = false; 
 
+        // V5.0 TAB LOGIC
+        function switchTab(evt, tabId) {
+            let i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+                tabcontent[i].classList.remove("active");
+            }
+            tablinks = document.getElementsByClassName("tab-btn");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("active");
+            }
+            document.getElementById(tabId).style.display = "block";
+            document.getElementById(tabId).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+
         function getQueryParam(variable, defaultValue) {
             var query = location.search.substring(1);
             var vars = query.split('&');
@@ -198,9 +259,24 @@
             return defaultValue || false;
         }
 
-        function toggleWeightIncrement() {
+        function updateProgressionUI() {
             const mode = document.getElementById("progressionMode").value;
-            document.getElementById("weightIncrementContainer").style.display = (mode === "0") ? "block" : "none";
+            const container = document.getElementById("weightIncrementContainer");
+            const desc = document.getElementById("progressionDesc");
+
+            if (mode === "0") {
+                container.style.display = "block";
+                desc.innerHTML = "<strong>Weight Progression:</strong> Automatically increases your target weight for the next workout if you complete all sets and reps successfully.";
+                desc.style.borderLeftColor = "#28a745"; // Green accent
+            } else if (mode === "1") {
+                container.style.display = "none";
+                desc.innerHTML = "<strong>Reps Progression:</strong> Automatically increases your target reps by 1 for the next workout if you complete all sets and reps successfully.";
+                desc.style.borderLeftColor = "#17a2b8"; // Blue accent
+            } else {
+                container.style.display = "none";
+                desc.innerHTML = "Progression is disabled. Your targets will remain exactly as you set them.";
+                desc.style.borderLeftColor = "#ccc"; // Gray outline
+            }
         }
 
         function updateModifierDesc() {
@@ -216,6 +292,29 @@
             } else if (val === "2") {
                 desc.innerHTML = "<strong>Superset logic applied:</strong> Links this exercise visually and functionally with the <strong>NEXT</strong> exercise in the list. The watch will bounce between the two until all sets are completed.";
                 desc.style.borderLeftColor = "#007bff"; 
+            } else if (val === "3") {
+                desc.innerHTML = "<strong>Warmup:</strong> Executes as normal, but the watch will automatically cut your configured rest timer in half between sets.";
+                desc.style.borderLeftColor = "#ffc107"; // Yellow
+            } else if (val === "4") {
+                desc.innerHTML = "<strong>Bodyweight:</strong> Disables weight tracking on the watch so you can focus entirely on your reps.";
+                desc.style.borderLeftColor = "#28a745"; // Green
+            }
+			const weightInput = document.getElementById("targetWeight");
+            
+            if (val === "4") {
+                desc.innerHTML = "<strong>Bodyweight:</strong> Disables weight tracking on the watch so you can focus entirely on your reps.";
+                desc.style.borderLeftColor = "#28a745"; // Green
+                
+                // UX FIX: Grey out the weight input
+                weightInput.disabled = true;
+                weightInput.value = "";
+                weightInput.placeholder = "Bodyweight (No weight needed)";
+                weightInput.style.backgroundColor = "#e9ecef";
+            } else {
+                // Restore the input for all other modifiers
+                weightInput.disabled = false;
+                weightInput.placeholder = "Target Weight in kg (e.g., 60)";
+                weightInput.style.backgroundColor = "";
             }
         }
 
@@ -265,14 +364,33 @@
         window.onload = function() {
             renderExerciseDropdown();
             updateModifierDesc(); 
+            updateProgressionUI();
             
             const storedUrl = getQueryParam('googleUrl', '');
             if (storedUrl && storedUrl.trim() !== '') {
                 document.getElementById('googleStatusContainer').style.display = 'block';
             }
+            
             const historyStr = getQueryParam('history', '[]');
             try { workoutHistory = JSON.parse(historyStr); } catch(e) { workoutHistory = []; }
             renderHistory();
+
+            // V5.0 TWO-WAY SYNC INIT
+            const syncStr = getQueryParam('sync', '{}');
+            try { 
+                syncedRoutinesDict = JSON.parse(syncStr); 
+                const syncKeys = Object.keys(syncedRoutinesDict);
+                if (syncKeys.length > 0) {
+                    document.getElementById('syncContainer').style.display = 'block';
+                    const syncDropdown = document.getElementById("syncSelect");
+                    syncKeys.forEach(key => {
+                        const opt = document.createElement("option");
+                        opt.value = key;
+                        opt.text = key;
+                        syncDropdown.appendChild(opt);
+                    });
+                }
+            } catch(e) {}
         };
 
         function flagClearGoogle() {
@@ -313,19 +431,16 @@
                 const date = parts[1] || "";
                 const duration = parts[2] || "0";
                 
-                // BACKWARD COMPATIBILITY CHECK
-                // Fallback empty values for old V3.0 workouts
                 let mood = "", accuracy = "", density = "", peakHR = "", avgHR = "";
                 let startIndex = 3; 
                 
-                // If parts[3] is a number (Mood Score) and not text (Exercise Name), it's a V4.0 workout!
                 if (parts.length > 8 && !isNaN(parts[3])) {
                     mood = parts[3];
                     accuracy = parts[4];
                     density = parts[5];
                     peakHR = parts[6];
                     avgHR = parts[7];
-                    startIndex = 8; // Shift the starting index for the exercise loop
+                    startIndex = 8; 
                 }
                 
                 let currentExercise = "";
@@ -338,10 +453,7 @@
                     } else {
                         let reps = parts[i];
                         let weight = parts[i+1];
-                        
-                        // V4.0 UPDATE: Inject the global metrics into the row string
                         csvContent += `${date},${routine},${duration},${mood},${accuracy},${density},${peakHR},${avgHR},${currentExercise},${setNum},${reps},${weight}\n`;
-                        
                         setNum++;
                         i++; 
                     }
@@ -367,7 +479,6 @@
             }
         }
 
-        // --- V4.0 CLIPBOARD BYPASS LOGIC ---
         function exportToText() {
             let currentName = document.getElementById("routineName").value || "My Routine";
             let exportData = {
@@ -404,7 +515,7 @@
                 if (importedData.n !== undefined && Array.isArray(importedData.e)) {
                     document.getElementById("routineName").value = importedData.n;
                     myRoutine = importedData.e.map(ex => {
-                        if (ex.length === 4) ex.push(0); // V3.0 backward compatibility
+                        if (ex.length === 4) ex.push(0); 
                         return ex;
                     });
                     renderRoutine(); 
@@ -418,7 +529,6 @@
             }
         }
 
-        // --- V4.0 MANUAL MOVE LOGIC (For Mobile Touch) ---
         function moveExercise(index, direction) {
             const newIndex = index + direction;
             if (newIndex < 0 || newIndex >= myRoutine.length) return;
@@ -442,18 +552,17 @@
                 let ex = myRoutine[i]; 
                 let modifier = ex.length > 4 ? parseInt(ex[4]) : 0; 
                 
-                // SAFETY CHECK 1: The Chain Breaker & Drop Set Catcher!
-                // If this is the second half of a superset, it CANNOT initiate another superset,
-                // and it CANNOT be a drop set. It must be a completely normal exercise block.
                 if (isSecondHalf && modifier !== 0) {
                     modifier = 0; 
-                    ex[4] = 0; // Fix the underlying data automatically
+                    ex[4] = 0; 
                 }
 
                 let badgeHTML = "";
                 if (modifier === 2) badgeHTML += '<span class="mod-badge badge-super">SUPER 1/2</span> ';
                 if (isSecondHalf) badgeHTML += '<span class="mod-badge badge-super-2">SUPER 2/2</span> ';
                 if (modifier === 1) badgeHTML += '<span class="mod-badge badge-drop">DROP SET</span> ';
+				if (modifier === 3) badgeHTML += '<span class="mod-badge badge-warmup">WARMUP</span> ';
+                if (modifier === 4) badgeHTML += '<span class="mod-badge badge-bodyweight">BODYWEIGHT</span> ';
 
                 let div = document.createElement("div");
                 div.className = "exercise-item";
@@ -473,9 +582,10 @@
                 let info = document.createElement("div");
                 info.className = "exercise-info";
                 
-                // V4.0 UI FIX: Changed spans to divs to respect the Flexbox column layout
                 let handle = `<div class="grab-handle">≡</div>`;
                 if (isSecondHalf) handle = `<div class="grab-handle" style="color:#007bff; margin-left:8px;">↳</div>`;
+
+				let commentHTML = (ex.length > 5 && ex[5] !== "") ? `<div style="font-size: 11px; color: #888; margin-top: 2px;">📝 ${ex[5]}</div>` : "";
                 
                 info.innerHTML = `
                     ${handle}
@@ -486,9 +596,8 @@
                 `;
                 
                 let btnGroup = document.createElement("div");
-                btnGroup.className = "btn-group"; // <-- THIS LOCKS THEM IN A SINGLE ROW!
+                btnGroup.className = "btn-group";
                 
-                // Determine if Up/Down buttons should be disabled
                 let upDisabled = (i === 0) ? "disabled style='opacity: 0.3;'" : "";
                 let downDisabled = (i === myRoutine.length - 1) ? "disabled style='opacity: 0.3;'" : "";
 
@@ -524,12 +633,26 @@
             const name = document.getElementById("exerciseSelect").value;
             const sets = document.getElementById("targetSets").value;
             const reps = document.getElementById("targetReps").value;
-            const weight = document.getElementById("targetWeight").value;
-            const modifier = document.getElementById("exerciseModifier").value;
-
-            if(sets === "" || reps === "" || weight === "") { alert("Please fill out sets, reps, and weight!"); return; }
             
-            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier)];
+            // UX FIX 1: Changed 'const' to 'let' so we can dynamically overwrite it!
+            let weight = document.getElementById("targetWeight").value;
+            const modifier = document.getElementById("exerciseModifier").value;
+            
+            // Safely grab the comment if the field exists
+            const commentField = document.getElementById("exerciseComment");
+            const comment = commentField ? commentField.value.trim() : "";
+
+            // UX FIX 2: Automatically set weight to "0" to bypass validation for Bodyweight
+            if (modifier === "4") {
+                weight = "0";
+            }
+
+            if(sets === "" || reps === "" || weight === "") { 
+                alert("Please fill out sets, reps, and weight!"); 
+                return; 
+            }
+            
+            const newExercise = [name, parseInt(sets), parseInt(reps), parseInt(weight), parseInt(modifier), comment];
 
             if (editingIndex === -1) myRoutine.push(newExercise);
             else {
@@ -538,13 +661,19 @@
                 document.getElementById("formTitle").innerText = "Add Exercise";
                 document.getElementById("addUpdateBtn").innerText = "+ Add to Routine";
             }
+            
             renderRoutine(); 
+            
+            // Reset the form fields
             document.getElementById("exerciseSearch").value = "";
             renderExerciseDropdown();
             document.getElementById("targetSets").value = "";
             document.getElementById("targetReps").value = "";
             document.getElementById("targetWeight").value = "";
             document.getElementById("exerciseModifier").value = "0"; 
+            if (commentField) commentField.value = "";
+            
+            // Reset the description and re-enable the weight box
             updateModifierDesc(); 
         }
 
@@ -558,14 +687,19 @@
             document.getElementById("targetSets").value = ex[1];
             document.getElementById("targetReps").value = ex[2];
             document.getElementById("targetWeight").value = ex[3];
-            
             document.getElementById("exerciseModifier").value = ex.length > 4 ? ex[4] : "0";
+			document.getElementById("exerciseComment").value = ex.length > 5 ? ex[5] : "";
             updateModifierDesc(); 
 
             editingIndex = index;
             document.getElementById("formTitle").innerText = "Edit Exercise";
             document.getElementById("addUpdateBtn").innerText = "Update Exercise";
-            window.scrollTo(0, 0);
+            
+            // Switch back to Builder tab to show the edit form
+        	document.querySelector('.tab-btn[onclick*="tab-builder"]').click();
+        
+        	// V5.0 UX FIX: Smooth scroll directly to the input form!
+        	document.getElementById("formTitle").scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function exportJSON() {
@@ -638,13 +772,16 @@
               for (let i = 0; i < myRoutine.length; i++) {
                   let ex = myRoutine[i]; 
                   let mod = ex.length > 4 ? ex[4] : 0;
-                  delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3] + "|" + mod;
+                  let cmt = (ex.length > 5 && ex[5].trim() !== "") ? ex[5].trim() : "-"; // Safety dash
+                  
+                  // Added the comment to the Bluetooth payload!
+                  delimitedString += "|" + ex[0] + "|" + ex[1] + "|" + ex[2] + "|" + ex[3] + "|" + mod + "|" + cmt;
               }
             }
 
-            if (delimitedString.length > 255) {
+            if (delimitedString.length > 1000) {
                 alert("⚠️ Routine Too Long!\n\nYour routine is " + delimitedString.length + " characters, but the watch can only store 255. \n\nPlease abbreviate some exercise names (e.g. 'DB Bench' instead of 'Dumbbell Bench Press') and try again.");
-                return; // Stop the function instantly so it doesn't send!
+                return; 
             }
 
             const configData = {
@@ -654,12 +791,77 @@
                 googleUrl: document.getElementById("googleUrlInput").value,
                 googlePwd: document.getElementById("googlePwdInput").value,
                 clearHistory: shouldClearHistory,
-                clearGoogle: shouldClearGoogle
+                clearGoogle: shouldClearGoogle,
+				updatedSync: syncedRoutinesDict
             };
 
             var returnTo = getQueryParam('return_to', 'pebblejs://close#');
             window.location.href = returnTo + encodeURIComponent(JSON.stringify(configData));
         }
+
+		let syncedRoutinesDict = {};
+
+        function loadSyncedRoutine() {
+            const selectedName = document.getElementById("syncSelect").value;
+            const syncString = syncedRoutinesDict[selectedName];
+            if (!syncString) return;
+
+            const parts = syncString.split('|');
+            document.getElementById("routineName").value = parts[0];
+            
+            let startIndex = 1;
+            
+            // V5.0 UX FIX: Check if the string contains the new Progression Settings
+            // (If the second item is -1, 0, or 1, we know it's the Progression Mode!)
+            if (parts[1] === "-1" || parts[1] === "0" || parts[1] === "1") {
+                document.getElementById("progressionMode").value = parts[1];
+                document.getElementById("weightIncrement").value = parts[2];
+                updateProgressionUI(); // Update the green/blue info box automatically
+                startIndex = 3; // Shift the loop start index past the new data
+            }
+
+            myRoutine = [];
+            
+            // Loop through the delimited string (6 fields per exercise)
+            for (let i = startIndex; i < parts.length; i += 6) {
+                if(parts[i]) {
+                    let name = parts[i];
+                    let sets = parseInt(parts[i+1]);
+                    let reps = parseInt(parts[i+2]);
+                    let weight = parseInt(parts[i+3]);
+                    let mod = parseInt(parts[i+4]);
+                    let comment = parts[i+5] === "-" ? "" : parts[i+5];
+                    
+                    myRoutine.push([name, sets, reps, weight, mod, comment]);
+                }
+            }
+            renderRoutine();
+            
+            // Switch back to the Builder tab so they can see the loaded routine
+            document.querySelector('.tab-btn[onclick*="tab-builder"]').click();
+            alert("✅ Auto-Progressed routine targets successfully loaded from watch!");
+        }
+
+		function deleteSyncedRoutine() {
+            const syncDropdown = document.getElementById("syncSelect");
+            if (syncDropdown.options.length === 0) return;
+            
+            const selectedName = syncDropdown.value;
+            if (confirm("Remove '" + selectedName + "' from your synced auto-progression list?")) {
+                
+                // 1. Remove it from our local dictionary
+                delete syncedRoutinesDict[selectedName];
+                
+                // 2. Remove it from the visual dropdown
+                syncDropdown.remove(syncDropdown.selectedIndex);
+                
+                // 3. Hide the whole box if that was the last one!
+                if (syncDropdown.options.length === 0) {
+                    document.getElementById('syncContainer').style.display = 'none';
+                }
+            }
+        }
+
     </script>
 </body>
 </html>
