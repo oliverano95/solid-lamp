@@ -891,33 +891,31 @@ static void summary_window_load(Window *window) {
       
       int s_written = snprintf(sync_buf, limit, "%s|%d|%d", s_routine_name, s_progression_mode, s_weight_increment);
       int s_off = (s_written < limit) ? s_written : limit - 1;
-
-      if (s_progression_mode != -1) {
-        for (int i = 0; i < s_total_exercises; i++) {
-          int base_sets = s_exercises[i].target_sets;
-          if (s_exercises[i].modifier == 1) {
-              s_exercises[i].target_sets = base_sets / 2;
-          }
-
-          persist_write_data(ROUTINE_EX_BASE + (s_current_slot * MAX_EXERCISES) + i, &s_exercises[i], sizeof(Exercise));
-
-          if (s_off < limit - 1) {
-              s_written = snprintf(sync_buf + s_off, limit - s_off, "|%s|%d|%d|%d|%d|%s", 
-                  s_exercises[i].name, s_exercises[i].target_sets, s_exercises[i].target_reps, 
-                  s_exercises[i].target_weight, s_exercises[i].modifier, 
-                  s_exercises[i].comment[0] != '\0' ? s_exercises[i].comment : "-");
-              s_off += (s_written < limit - s_off) ? s_written : limit - s_off - 1;
-          }
-          s_exercises[i].target_sets = base_sets;
+    
+      for (int i = 0; i < s_total_exercises; i++) {
+        int base_sets = s_exercises[i].target_sets;
+        if (s_exercises[i].modifier == 1) {
+            s_exercises[i].target_sets = base_sets / 2;
         }
+    
+        if (s_progression_mode != -1) {
+            persist_write_data(ROUTINE_EX_BASE + (s_current_slot * MAX_EXERCISES) + i, &s_exercises[i], sizeof(Exercise));
+        }
+    
+        if (s_off < limit - 1) {
+            s_written = snprintf(sync_buf + s_off, limit - s_off, "|%s|%d|%d|%d|%d|%s", 
+                s_exercises[i].name, s_exercises[i].target_sets, s_exercises[i].target_reps, 
+                s_exercises[i].target_weight, s_exercises[i].modifier, 
+                s_exercises[i].comment[0] != '\0' ? s_exercises[i].comment : "-");
+            s_off += (s_written < limit - s_off) ? s_written : limit - s_off - 1;
+        }
+        s_exercises[i].target_sets = base_sets;
       }
       
       DictionaryIterator *iter;
       if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
           dict_write_cstring(iter, MESSAGE_KEY_WORKOUT_SUMMARY, export_buf);
-          if (s_progression_mode != -1) {
-              dict_write_cstring(iter, MESSAGE_KEY_ROUTINE_DATA, sync_buf);
-          }
+          dict_write_cstring(iter, MESSAGE_KEY_ROUTINE_DATA, sync_buf);
           app_message_outbox_send();
           text_layer_set_text(s_sum_info_layer, "Data synced!\nPress any button.");
       } else {
@@ -1921,6 +1919,7 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
     s_total_workout_sets = 0;
     for (int j = 0; j < s_total_exercises; j++) {
         persist_read_data(ROUTINE_EX_BASE + (i * MAX_EXERCISES) + j, &s_exercises[j], sizeof(Exercise));
+        s_exercises[j].current_set = 1;
         s_total_workout_sets += s_exercises[j].target_sets;
     }
     
