@@ -60,21 +60,22 @@ static int s_total_hr = 0;
 static int s_hr_samples = 0;
 
 // --- USER SETTINGS ---
-static int s_set_rest_sec = 60;
-static int s_ex_rest_sec = 90;
+static int s_set_rest_sec = 60; 
+static int s_ex_rest_sec = 90; 
 static int s_set_vibe = 1; 
-static int s_ex_vibe = 3;  
-static int s_rest_vibe = 2;  
+static int s_ex_vibe = 3; 
+static int s_rest_vibe = 2; 
 static int s_theme_color_idx = 0; 
 static int s_weight_unit_idx = 0; 
 static int s_long_press_ms = 500; 
 static int s_drop_set_pct = 20; 
-static int s_super_rest_sec = 15;
-static int s_drop_rest_sec = 5;   
+static int s_super_rest_sec = 15; 
+static int s_drop_rest_sec = 5; 
 static int s_last_routine_slot = 0; 
 static int s_dark_mode = 0; 
-static int s_shortcut_up = 0;   
+static int s_shortcut_up = 1; 
 static int s_shortcut_down = 2; 
+static int s_shortcut_select = 4;
 
 // --- THEME HELPERS ---
 static bool is_dark_theme() {
@@ -120,10 +121,16 @@ static TextLayer *s_confirm_text_layer, *s_sum_title_layer, *s_sum_info_layer, *
 static TextLayer *s_rest_title_layer, *s_rest_time_layer, *s_rest_skip_layer;
 static TextLayer *s_beat_layer, *s_missed_layer, *s_accuracy_layer, *s_density_layer;
 
+static Window *s_action_window, *s_inspector_window;
+static SimpleMenuLayer *s_action_menu_layer;
+static SimpleMenuSection s_action_menu_sections[1];
+static SimpleMenuItem s_action_menu_items[3];
+static MenuLayer *s_inspector_menu_layer;
+
 static Window *s_mega_window;
 static SimpleMenuLayer *s_mega_menu_layer;
 static SimpleMenuSection s_mega_menu_sections[1];
-static SimpleMenuItem s_mega_menu_items[4];
+static SimpleMenuItem s_mega_menu_items[6];
 
 static Window *s_note_window;
 static TextLayer *s_note_text_layer;
@@ -220,6 +227,7 @@ static void load_settings() {
   if(persist_exists(SETTINGS_KEY_BASE + 14)) s_dark_mode = persist_read_int(SETTINGS_KEY_BASE + 14);
   if(persist_exists(SETTINGS_KEY_BASE + 15)) s_shortcut_up = persist_read_int(SETTINGS_KEY_BASE + 15);
   if(persist_exists(SETTINGS_KEY_BASE + 16)) s_shortcut_down = persist_read_int(SETTINGS_KEY_BASE + 16);
+  if(persist_exists(SETTINGS_KEY_BASE + 17)) s_shortcut_select = persist_read_int(SETTINGS_KEY_BASE + 17);
 }
 
 static void save_setting(int key_offset, int value) {
@@ -372,7 +380,7 @@ static uint16_t settings_get_num_rows_callback(MenuLayer *menu_layer, uint16_t s
   if (section_index == 1) return 3; 
   if (section_index == 2) return 1; 
   if (section_index == 3) return 4; 
-  if (section_index == 4) return 2; 
+  if (section_index == 4) return 3; 
   return 0;
 }
 
@@ -430,10 +438,11 @@ static void settings_draw_row_callback(GContext* ctx, const Layer *cell_layer, M
         break;
     }
   } else if (cell_index->section == 4) { 
-    static const char* actions[] = {"Variations", "View Note", "Swap (Later)", "Skip Entirely"};
+    static const char* actions[] = {"Variations", "View Note", "Swap (Later)", "Skip Entirely", "Finish Set", "Skip Set"};
     switch(cell_index->row) {
       case 0: snprintf(title, sizeof(title), "Up Long Press"); snprintf(subtitle, sizeof(subtitle), "%s", actions[s_shortcut_up]); break;
       case 1: snprintf(title, sizeof(title), "Down Long Press"); snprintf(subtitle, sizeof(subtitle), "%s", actions[s_shortcut_down]); break;
+      case 2: snprintf(title, sizeof(title), "Select Long Press"); snprintf(subtitle, sizeof(subtitle), "%s", actions[s_shortcut_select]); break;
     }
   }
   menu_cell_basic_draw(ctx, cell_layer, title, subtitle, NULL);
@@ -479,8 +488,9 @@ static void settings_select_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
     }
   } else if (cell_index->section == 4) { 
     switch(cell_index->row) {
-      case 0: s_shortcut_up++; if(s_shortcut_up > 3) s_shortcut_up = 0; save_setting(15, s_shortcut_up); break;
-      case 1: s_shortcut_down++; if(s_shortcut_down > 3) s_shortcut_down = 0; save_setting(16, s_shortcut_down); break;
+      case 0: s_shortcut_up++; if(s_shortcut_up > 5) s_shortcut_up = 0; save_setting(15, s_shortcut_up); break;
+      case 1: s_shortcut_down++; if(s_shortcut_down > 5) s_shortcut_down = 0; save_setting(16, s_shortcut_down); break;
+      case 2: s_shortcut_select++; if(s_shortcut_select > 5) s_shortcut_select = 0; save_setting(17, s_shortcut_select); break;
     }
   }
   menu_layer_reload_data(s_settings_menu_layer);
@@ -893,13 +903,14 @@ static void summary_window_load(Window *window) {
       int s_off = (s_written < limit) ? s_written : limit - 1;
     
       for (int i = 0; i < s_total_exercises; i++) {
+        
+        if (s_progression_mode != -1) {
+            persist_write_data(ROUTINE_EX_BASE + (s_current_slot * MAX_EXERCISES) + i, &s_exercises[i], sizeof(Exercise));
+        }
+    
         int base_sets = s_exercises[i].target_sets;
         if (s_exercises[i].modifier == 1) {
             s_exercises[i].target_sets = base_sets / 2;
-        }
-    
-        if (s_progression_mode != -1) {
-            persist_write_data(ROUTINE_EX_BASE + (s_current_slot * MAX_EXERCISES) + i, &s_exercises[i], sizeof(Exercise));
         }
     
         if (s_off < limit - 1) {
@@ -909,6 +920,7 @@ static void summary_window_load(Window *window) {
                 s_exercises[i].comment[0] != '\0' ? s_exercises[i].comment : "-");
             s_off += (s_written < limit - s_off) ? s_written : limit - s_off - 1;
         }
+        
         s_exercises[i].target_sets = base_sets;
       }
       
@@ -1313,11 +1325,12 @@ static void skip_rest() {
   update_workout_ui(false);
 }
 
-static void skip_exercise() {
+static void swap_exercise() {
   if (s_is_resting) return;
   if (s_curr_ex_idx + 1 >= s_total_exercises) return;
 
   if (s_exercises[s_curr_ex_idx].modifier == 2 || (s_curr_ex_idx > 0 && s_exercises[s_curr_ex_idx - 1].modifier == 2)) {
+      vibes_double_pulse(); 
       return; 
   }
 
@@ -1339,6 +1352,33 @@ static void skip_exercise() {
 }
 
 static void perform_true_skip() {
+  Exercise *ex = &s_exercises[s_curr_ex_idx];
+  bool is_first_half = (ex->modifier == 2 && s_curr_ex_idx + 1 < s_total_exercises);
+  bool is_second_half = (s_curr_ex_idx > 0 && s_exercises[s_curr_ex_idx - 1].modifier == 2);
+  
+  for (int i = ex->current_set - 1; i < ex->target_sets; i++) {
+      ex->actual_reps[i] = 0;
+      ex->actual_weight[i] = 0;
+  }
+  ex->current_set = ex->target_sets;
+
+  if (is_first_half) {
+      Exercise *next_ex = &s_exercises[s_curr_ex_idx + 1];
+      for (int i = next_ex->current_set - 1; i < next_ex->target_sets; i++) {
+          next_ex->actual_reps[i] = 0;
+          next_ex->actual_weight[i] = 0;
+      }
+      next_ex->current_set = next_ex->target_sets;
+      s_curr_ex_idx++;
+  } else if (is_second_half) {
+      Exercise *prev_ex = &s_exercises[s_curr_ex_idx - 1];
+      for (int i = prev_ex->current_set - 1; i < prev_ex->target_sets; i++) {
+          prev_ex->actual_reps[i] = 0;
+          prev_ex->actual_weight[i] = 0;
+      }
+      prev_ex->current_set = prev_ex->target_sets;
+  }
+
   if (s_curr_ex_idx + 1 < s_total_exercises) {
      s_curr_ex_idx++;
      Exercise *new_ex = &s_exercises[s_curr_ex_idx];
@@ -1348,212 +1388,20 @@ static void perform_true_skip() {
      if (new_ex->modifier == 1 && (new_ex->current_set % 2 == 0)) {
          s_temp_weight = (s_temp_weight * (100 - s_drop_set_pct)) / 100;
      }
+     
+     s_is_resting = false;
+     layer_set_hidden(s_rest_overlay_layer, true);
+     s_edit_mode = 0;
+     
      update_workout_ui(true);
-  }
-}
-
-static void execute_shortcut(int action_idx) {
-  if (s_is_resting) return; 
-  switch (action_idx) {
-    case 0: 
-      push_variation_window(); 
-      break;
-    case 1: 
-      if (s_exercises[s_curr_ex_idx].comment[0] != '\0') window_stack_push(s_note_window, true);
-      else vibes_short_pulse(); 
-      break;
-    case 2: 
-      skip_exercise(); 
-      break;
-    case 3: 
-      perform_true_skip(); 
-      break;
-  }
-}
-
-static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  if (!s_is_paused) {
-      s_workout_sec++;
-  }
-  int m = s_workout_sec / 60;
-  int s = s_workout_sec % 60;
-  static char time_buf[16];
-  snprintf(time_buf, sizeof(time_buf), "%02d:%02d", m, s);
-  text_layer_set_text(s_timer_layer, time_buf);
-
-  static int s_last_minute = -1;
-  if (tick_time->tm_min != s_last_minute) {
-    static char clock_buf[16];
-    if(clock_is_24h_style()) strftime(clock_buf, sizeof(clock_buf), "%H:%M", tick_time);
-    else strftime(clock_buf, sizeof(clock_buf), "%I:%M", tick_time);
-    text_layer_set_text(s_clock_layer, clock_buf);
-    s_last_minute = tick_time->tm_min;
-    #if defined(PBL_HEALTH)
-      HealthServiceAccessibilityMask hr_mask = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-      if (hr_mask & HealthServiceAccessibilityMaskAvailable) {
-        HealthValue current_hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        if (current_hr > 0) {
-          if (current_hr > s_peak_hr) s_peak_hr = current_hr;
-          s_total_hr += current_hr;
-          s_hr_samples++;
-        }
-      }
-    #endif
-  }
-
-  #if !defined(PBL_ROUND)
-    #if defined(PBL_HEALTH)
-      HealthServiceAccessibilityMask hr_mask_display = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-      if (hr_mask_display & HealthServiceAccessibilityMaskAvailable) {
-        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        static char hr_buf[16];
-        if (hr > 0) snprintf(hr_buf, sizeof(hr_buf), "%lu BPM", (uint32_t)hr);
-        else snprintf(hr_buf, sizeof(hr_buf), "-- BPM");
-        text_layer_set_text(s_hr_layer, hr_buf);
-      }
-    #endif
-  #endif
-
-  if (s_is_resting) {
-    if (!s_is_paused) {
-        s_rest_seconds_remaining--;
-    }
-    if (s_rest_seconds_remaining <= 0) {
-      skip_rest();
-      play_vibe(s_rest_vibe); 
-    } else {
-      static char rest_buf[16];
-      snprintf(rest_buf, sizeof(rest_buf), "%d", s_rest_seconds_remaining);
-      text_layer_set_text(s_rest_time_layer, rest_buf);
-    }
-  }
-}
-
-// --- V5.0 NOTE WINDOW LOGIC ---
-static void note_window_load(Window *window) {
-  Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_bounds(window_layer);
-
-  s_note_text_layer = text_layer_create(GRect(5, 30, bounds.size.w - 10, bounds.size.h - 30));
-  text_layer_set_font(s_note_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-  text_layer_set_text_alignment(s_note_text_layer, GTextAlignmentCenter);
-  text_layer_set_text(s_note_text_layer, s_exercises[s_curr_ex_idx].comment);
-  
-  text_layer_set_background_color(s_note_text_layer, GColorClear);
-  text_layer_set_text_color(s_note_text_layer, PBL_IF_COLOR_ELSE(is_dark_theme() ? GColorWhite : GColorBlack, GColorBlack));
-  window_set_background_color(window, PBL_IF_COLOR_ELSE(is_dark_theme() ? GColorBlack : GColorWhite, GColorWhite));
-  
-  layer_add_child(window_layer, text_layer_get_layer(s_note_text_layer));
-}
-
-static void note_window_unload(Window *window) {
-  text_layer_destroy(s_note_text_layer);
-}
-
-// --- V5.0 MEGA MENU LOGIC ---
-static void menu_var_callback(int index, void *ctx) {
-  push_variation_window(); 
-}
-
-static void menu_note_callback(int index, void *ctx) {
-  if (s_exercises[s_curr_ex_idx].comment[0] != '\0') {
-    window_stack_push(s_note_window, true);
   } else {
-    vibes_short_pulse(); 
+     vibes_double_pulse();
+     push_sensation_window(); 
+     window_stack_remove(s_workout_window, false);
   }
 }
 
-static void menu_swap_callback(int index, void *ctx) {
-  skip_exercise(); 
-  window_stack_pop(true);
-}
-
-static void menu_skip_callback(int index, void *ctx) {
-  perform_true_skip();
-  window_stack_pop(true);
-}
-
-static void mega_window_load(Window *window) {
-  int num_items = 0;
-
-  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
-    .title = "Variations",
-    .subtitle = "Add a variation",
-    .callback = menu_var_callback,
-  };
-
-  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
-    .title = "View Note",
-    .subtitle = s_exercises[s_curr_ex_idx].comment[0] != '\0' ? s_exercises[s_curr_ex_idx].comment : "No note attached",
-    .callback = menu_note_callback,
-  };
-
-  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
-    .title = "Do Later (Swap)",
-    .subtitle = "Swap with next exercise",
-    .callback = menu_swap_callback,
-  };
-
-  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
-    .title = "Skip Entirely",
-    .subtitle = "Skip to next exercise",
-    .callback = menu_skip_callback,
-  };
-
-  s_mega_menu_sections[0] = (SimpleMenuSection) {
-    .num_items = num_items,
-    .items = s_mega_menu_items,
-  };
-
-  Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_frame(window_layer);
-
-  s_mega_menu_layer = simple_menu_layer_create(bounds, window, s_mega_menu_sections, 1, NULL);
-
-  MenuLayer *internal_menu = simple_menu_layer_get_menu_layer(s_mega_menu_layer);
-  menu_layer_set_normal_colors(internal_menu, get_bg_color(), get_text_color()); 
-  menu_layer_set_highlight_colors(internal_menu, get_theme_color(), get_bg_color());
-
-  layer_add_child(window_layer, simple_menu_layer_get_layer(s_mega_menu_layer));
-}
-
-static void mega_window_unload(Window *window) {
-  simple_menu_layer_destroy(s_mega_menu_layer);
-}
-
-static void wo_up_click(ClickRecognizerRef recognizer, void *context) {
-  if (s_is_resting) return; 
-  if (s_edit_mode == 0) s_temp_reps++; else s_temp_weight++;
-  update_workout_ui(false);
-}
-
-static void wo_down_click(ClickRecognizerRef recognizer, void *context) {
-  if (s_is_resting) return;
-  if (s_edit_mode == 0 && s_temp_reps > 0) s_temp_reps--; 
-  else if (s_edit_mode == 1 && s_temp_weight > 0) s_temp_weight--;
-  update_workout_ui(false);
-}
-
-static void wo_up_long_click(ClickRecognizerRef recognizer, void *context) {
-  execute_shortcut(s_shortcut_up);
-}
-
-static void wo_down_long_click(ClickRecognizerRef recognizer, void *context) {
-  execute_shortcut(s_shortcut_down);
-}
-
-static void wo_select_short_click(ClickRecognizerRef recognizer, void *context) {
-  if (s_is_resting) { skip_rest(); return; }
-  
-  if (s_exercises[s_curr_ex_idx].modifier == 4) {
-      s_edit_mode = 0; 
-  } else {
-      s_edit_mode = !s_edit_mode; 
-  }
-  update_workout_ui(true);
-}
-
-static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
+static void perform_finish_set() {
   if (s_is_resting) { skip_rest(); return; }
 
   Exercise *ex = &s_exercises[s_curr_ex_idx];
@@ -1634,6 +1482,242 @@ static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
     set_rest_overlay_state(true, true); 
   }
   update_workout_ui(false); 
+}
+
+static void perform_skip_set() {
+  if (s_is_resting) { skip_rest(); return; }
+  
+  s_temp_reps = 0;
+  s_temp_weight = 0;
+  
+  perform_finish_set(); 
+  
+  if (s_is_resting) {
+      skip_rest();
+  }
+}
+
+static void execute_shortcut(int action_idx) {
+  if (s_is_resting && action_idx != 4 && action_idx != 5) return;
+  switch (action_idx) {
+    case 0: push_variation_window(); break;
+    case 1: 
+      if (s_exercises[s_curr_ex_idx].comment[0] != '\0') window_stack_push(s_note_window, true);
+      else vibes_short_pulse(); 
+      break;
+    case 2: swap_exercise(); break;
+    case 3: perform_true_skip(); break;
+    case 4: perform_finish_set(); break;
+    case 5: perform_skip_set(); break;
+  }
+}
+
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  if (!s_is_paused) {
+      s_workout_sec++;
+  }
+  int m = s_workout_sec / 60;
+  int s = s_workout_sec % 60;
+  static char time_buf[16];
+  snprintf(time_buf, sizeof(time_buf), "%02d:%02d", m, s);
+  text_layer_set_text(s_timer_layer, time_buf);
+
+  static int s_last_minute = -1;
+  if (tick_time->tm_min != s_last_minute) {
+    static char clock_buf[16];
+    if(clock_is_24h_style()) strftime(clock_buf, sizeof(clock_buf), "%H:%M", tick_time);
+    else strftime(clock_buf, sizeof(clock_buf), "%I:%M", tick_time);
+    text_layer_set_text(s_clock_layer, clock_buf);
+    s_last_minute = tick_time->tm_min;
+    #if defined(PBL_HEALTH)
+      HealthServiceAccessibilityMask hr_mask = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+      if (hr_mask & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue current_hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        if (current_hr > 0) {
+          if (current_hr > s_peak_hr) s_peak_hr = current_hr;
+          s_total_hr += current_hr;
+          s_hr_samples++;
+        }
+      }
+    #endif
+  }
+
+  #if !defined(PBL_ROUND)
+    #if defined(PBL_HEALTH)
+      HealthServiceAccessibilityMask hr_mask_display = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+      if (hr_mask_display & HealthServiceAccessibilityMaskAvailable) {
+        HealthValue hr = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        static char hr_buf[16];
+        if (hr > 0) snprintf(hr_buf, sizeof(hr_buf), "%lu BPM", (uint32_t)hr);
+        else snprintf(hr_buf, sizeof(hr_buf), "-- BPM");
+        text_layer_set_text(s_hr_layer, hr_buf);
+      }
+    #endif
+  #endif
+
+  if (s_is_resting) {
+    if (!s_is_paused) {
+        s_rest_seconds_remaining--;
+    }
+    if (s_rest_seconds_remaining <= 0) {
+      skip_rest();
+      play_vibe(s_rest_vibe); 
+    } else {
+      static char rest_buf[16];
+      snprintf(rest_buf, sizeof(rest_buf), "%d", s_rest_seconds_remaining);
+      text_layer_set_text(s_rest_time_layer, rest_buf);
+    }
+  }
+}
+
+// --- NOTE WINDOW LOGIC ---
+static void note_window_load(Window *window) {
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
+
+  s_note_text_layer = text_layer_create(GRect(5, 30, bounds.size.w - 10, bounds.size.h - 30));
+  text_layer_set_font(s_note_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(s_note_text_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_note_text_layer, s_exercises[s_curr_ex_idx].comment);
+  
+  text_layer_set_background_color(s_note_text_layer, GColorClear);
+  text_layer_set_text_color(s_note_text_layer, PBL_IF_COLOR_ELSE(is_dark_theme() ? GColorWhite : GColorBlack, GColorBlack));
+  window_set_background_color(window, PBL_IF_COLOR_ELSE(is_dark_theme() ? GColorBlack : GColorWhite, GColorWhite));
+  
+  layer_add_child(window_layer, text_layer_get_layer(s_note_text_layer));
+}
+
+static void note_window_unload(Window *window) {
+  text_layer_destroy(s_note_text_layer);
+}
+
+// --- MEGA MENU LOGIC ---
+static void menu_var_callback(int index, void *ctx) {
+  push_variation_window(); 
+}
+
+static void menu_note_callback(int index, void *ctx) {
+  if (s_exercises[s_curr_ex_idx].comment[0] != '\0') {
+    window_stack_push(s_note_window, true);
+  } else {
+    vibes_short_pulse(); 
+  }
+}
+
+static void menu_swap_callback(int index, void *ctx) {
+  window_stack_remove(s_mega_window, false);
+  swap_exercise(); 
+}
+
+static void menu_skip_callback(int index, void *ctx) {
+  window_stack_remove(s_mega_window, false);
+  perform_true_skip();
+}
+
+static void menu_finish_callback(int index, void *ctx) {
+  window_stack_remove(s_mega_window, false);
+  perform_finish_set();
+}
+
+static void menu_skip_set_callback(int index, void *ctx) {
+  window_stack_remove(s_mega_window, false);
+  perform_skip_set();
+}
+
+static void mega_window_load(Window *window) {
+  int num_items = 0;
+  
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Finish Set",
+    .subtitle = "Log & progress workout",
+    .callback = menu_finish_callback,
+  };
+  
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "View Note",
+    .subtitle = s_exercises[s_curr_ex_idx].comment[0] != '\0' ? s_exercises[s_curr_ex_idx].comment : "No note attached",
+    .callback = menu_note_callback,
+  };
+
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Variations",
+    .subtitle = "Add a variation",
+    .callback = menu_var_callback,
+  };
+
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Do Later (Swap)",
+    .subtitle = "Swap with next exercise",
+    .callback = menu_swap_callback,
+  };
+    
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Skip Set (Log 0)",
+    .subtitle = "Log 0/0 and progress to next set",
+    .callback = menu_skip_set_callback,
+  };
+  
+  s_mega_menu_items[num_items++] = (SimpleMenuItem) {
+    .title = "Skip Exercise (Log 0)",
+    .subtitle = "Log 0/0 and progress to next exercise",
+    .callback = menu_skip_callback,
+  };
+
+  s_mega_menu_sections[0] = (SimpleMenuSection) {
+    .num_items = num_items,
+    .items = s_mega_menu_items,
+  };
+
+  Layer *window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_frame(window_layer);
+
+  s_mega_menu_layer = simple_menu_layer_create(bounds, window, s_mega_menu_sections, 1, NULL);
+
+  MenuLayer *internal_menu = simple_menu_layer_get_menu_layer(s_mega_menu_layer);
+  menu_layer_set_normal_colors(internal_menu, get_bg_color(), get_text_color()); 
+  menu_layer_set_highlight_colors(internal_menu, get_theme_color(), get_bg_color());
+
+  layer_add_child(window_layer, simple_menu_layer_get_layer(s_mega_menu_layer));
+}
+
+static void mega_window_unload(Window *window) {
+  simple_menu_layer_destroy(s_mega_menu_layer);
+}
+
+static void wo_up_click(ClickRecognizerRef recognizer, void *context) {
+  if (s_is_resting) return; 
+  if (s_edit_mode == 0) s_temp_reps++; else s_temp_weight++;
+  update_workout_ui(false);
+}
+
+static void wo_down_click(ClickRecognizerRef recognizer, void *context) {
+  if (s_is_resting) return;
+  if (s_edit_mode == 0 && s_temp_reps > 0) s_temp_reps--; 
+  else if (s_edit_mode == 1 && s_temp_weight > 0) s_temp_weight--;
+  update_workout_ui(false);
+}
+
+static void wo_up_long_click(ClickRecognizerRef recognizer, void *context) {
+  execute_shortcut(s_shortcut_up);
+}
+
+static void wo_down_long_click(ClickRecognizerRef recognizer, void *context) {
+  execute_shortcut(s_shortcut_down);
+}
+
+static void wo_select_short_click(ClickRecognizerRef recognizer, void *context) {
+  if (s_is_resting) { skip_rest(); return; }
+  
+  if (s_exercises[s_curr_ex_idx].modifier == 4) {
+      s_edit_mode = 0; 
+  } else {
+      s_edit_mode = !s_edit_mode; 
+  }
+  update_workout_ui(true);
+}
+
+static void wo_select_long_click(ClickRecognizerRef recognizer, void *context) {
+  execute_shortcut(s_shortcut_select);
 }
 
 static void wo_select_double_click(ClickRecognizerRef recognizer, void *context) {
@@ -1866,6 +1950,41 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
   }
 }
 
+static void start_workout_from_slot(int slot_idx) {
+  s_current_slot = slot_idx; 
+  
+  RoutineHeader header;
+  persist_read_data(STORAGE_KEY_BASE + slot_idx, &header, sizeof(RoutineHeader));
+  snprintf(s_routine_name, sizeof(s_routine_name), "%s", header.name);
+  s_total_exercises = header.total_exercises;
+  
+  s_total_workout_sets = 0;
+  for (int j = 0; j < s_total_exercises; j++) {
+      persist_read_data(ROUTINE_EX_BASE + (slot_idx * MAX_EXERCISES) + j, &s_exercises[j], sizeof(Exercise));
+      s_exercises[j].current_set = 1; 
+      s_total_workout_sets += s_exercises[j].target_sets;
+  }
+  
+  s_curr_ex_idx = 0;
+  s_workout_sec = 0;
+  s_peak_hr = 0;
+  s_total_hr = 0;
+  s_hr_samples = 0;
+  s_temp_reps = s_exercises[0].target_reps;
+  
+  int active_weight = s_exercises[0].target_weight;
+  if (s_exercises[0].modifier == 1 && (s_exercises[0].current_set % 2 == 0)) {
+      active_weight = (active_weight * (100 - s_drop_set_pct)) / 100;
+  }
+  s_temp_weight = active_weight;
+  
+  s_is_resting = false;
+  s_rest_seconds_remaining = 0;
+  s_workout_active = true; 
+  
+  push_workout_window(); 
+}
+
 static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
   int i = cell_index->row;
   
@@ -1909,37 +2028,115 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
   }
   
   if (i < s_active_slots) {
-    s_current_slot = i; 
-    
-    RoutineHeader header;
-    persist_read_data(STORAGE_KEY_BASE + i, &header, sizeof(RoutineHeader));
-    snprintf(s_routine_name, sizeof(s_routine_name), "%s", header.name);
-    s_total_exercises = header.total_exercises;
-    
-    s_total_workout_sets = 0;
-    for (int j = 0; j < s_total_exercises; j++) {
-        persist_read_data(ROUTINE_EX_BASE + (i * MAX_EXERCISES) + j, &s_exercises[j], sizeof(Exercise));
-        s_exercises[j].current_set = 1;
-        s_total_workout_sets += s_exercises[j].target_sets;
-    }
-    
-    s_curr_ex_idx = 0;
-    s_workout_sec = 0;
-    s_peak_hr = 0;
-    s_total_hr = 0;
-    s_hr_samples = 0;
-    s_temp_reps = s_exercises[0].target_reps;
-    s_temp_weight = s_exercises[0].target_weight;
-    s_is_resting = false;
-    s_rest_seconds_remaining = 0;
-    s_workout_active = true; 
-    
-    push_workout_window(); 
+    start_workout_from_slot(i);
   } else if (i == s_active_slots && s_active_slots < MAX_SLOTS) {
     push_help_window(); 
   } else {
     push_settings_window(); 
   }
+}
+
+// ==========================================
+// ROUTINE INSPECTOR LOGIC
+// ==========================================
+static uint16_t inspector_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
+  return s_slot_counts[s_slot_to_edit];
+}
+
+static void inspector_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuIndex *cell_index, void *data) {
+  Exercise temp_ex;
+  persist_read_data(ROUTINE_EX_BASE + (s_slot_to_edit * MAX_EXERCISES) + cell_index->row, &temp_ex, sizeof(Exercise));
+  
+  char subtitle[32];
+  if (temp_ex.modifier == 4) {
+      snprintf(subtitle, sizeof(subtitle), "%d Sets x %d Reps (BW)", temp_ex.target_sets, temp_ex.target_reps);
+  } else {
+      snprintf(subtitle, sizeof(subtitle), "%d Sets x %d Reps @ %d%s", 
+          temp_ex.target_sets, temp_ex.target_reps, temp_ex.target_weight, s_weight_unit_idx == 0 ? "kg" : "lbs");
+  }
+  menu_cell_basic_draw(ctx, cell_layer, temp_ex.name, subtitle, NULL);
+}
+
+static void inspector_window_load(Window *window) {
+  Layer *w_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(w_layer);
+  
+  s_inspector_menu_layer = menu_layer_create(bounds);
+  menu_layer_set_callbacks(s_inspector_menu_layer, NULL, (MenuLayerCallbacks){
+    .get_num_rows = inspector_get_num_rows_callback,
+    .draw_row = inspector_draw_row_callback,
+  });
+  
+  menu_layer_set_normal_colors(s_inspector_menu_layer, get_bg_color(), get_text_color());
+  menu_layer_set_highlight_colors(s_inspector_menu_layer, get_theme_color(), get_bg_color());
+  menu_layer_set_click_config_onto_window(s_inspector_menu_layer, window);
+  layer_add_child(w_layer, menu_layer_get_layer(s_inspector_menu_layer));
+}
+
+static void inspector_window_unload(Window *window) {
+  menu_layer_destroy(s_inspector_menu_layer);
+}
+
+static void push_inspector_window() {
+  if(!s_inspector_window) {
+    s_inspector_window = window_create();
+    window_set_window_handlers(s_inspector_window, (WindowHandlers) { .load = inspector_window_load, .unload = inspector_window_unload });
+  }
+  window_set_background_color(s_inspector_window, get_bg_color());
+  window_stack_push(s_inspector_window, true);
+}
+
+// ==========================================
+// V5.3 NEW: ROUTINE ACTION MENU
+// ==========================================
+static void action_start_callback(int index, void *ctx) {
+  window_stack_remove(s_action_window, false);
+  start_workout_from_slot(s_slot_to_edit);
+}
+
+static void action_inspect_callback(int index, void *ctx) {
+  push_inspector_window();
+}
+
+static void action_edit_callback(int index, void *ctx) {
+  s_target_swap_slot = s_slot_to_edit;
+  push_confirm_window();
+}
+
+static void action_window_load(Window *window) {
+  int num_items = 0;
+  s_action_menu_items[num_items++] = (SimpleMenuItem) { .title = "Start Workout", .callback = action_start_callback };
+  s_action_menu_items[num_items++] = (SimpleMenuItem) { .title = "View Exercises", .callback = action_inspect_callback };
+  s_action_menu_items[num_items++] = (SimpleMenuItem) { .title = "Move / Delete", .callback = action_edit_callback };
+
+  s_action_menu_sections[0] = (SimpleMenuSection) {
+    .title = s_slot_names[s_slot_to_edit],
+    .num_items = num_items,
+    .items = s_action_menu_items,
+  };
+
+  Layer *w_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_frame(w_layer);
+
+  s_action_menu_layer = simple_menu_layer_create(bounds, window, s_action_menu_sections, 1, NULL);
+  MenuLayer *internal_menu = simple_menu_layer_get_menu_layer(s_action_menu_layer);
+  menu_layer_set_normal_colors(internal_menu, get_bg_color(), get_text_color()); 
+  menu_layer_set_highlight_colors(internal_menu, get_theme_color(), get_bg_color());
+  
+  layer_add_child(w_layer, simple_menu_layer_get_layer(s_action_menu_layer));
+}
+
+static void action_window_unload(Window *window) {
+  simple_menu_layer_destroy(s_action_menu_layer);
+}
+
+static void push_action_window() {
+  if(!s_action_window) {
+    s_action_window = window_create();
+    window_set_window_handlers(s_action_window, (WindowHandlers) { .load = action_window_load, .unload = action_window_unload });
+  }
+  window_set_background_color(s_action_window, get_bg_color());
+  window_stack_push(s_action_window, true);
 }
 
 static void menu_select_long_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
@@ -1950,8 +2147,7 @@ static void menu_select_long_callback(MenuLayer *menu_layer, MenuIndex *cell_ind
   }
   if (i < s_active_slots) {
     s_slot_to_edit = i;
-    s_target_swap_slot = i;
-    push_confirm_window(); 
+    push_action_window(); 
   }
 }
 
@@ -2088,6 +2284,8 @@ static void deinit() {
   if (s_sensation_window) { window_destroy(s_sensation_window); s_sensation_window = NULL; }
   if (s_mega_window) { window_destroy(s_mega_window); s_mega_window = NULL; }
   if (s_note_window) { window_destroy(s_note_window); s_note_window = NULL; }
+  if (s_action_window) { window_destroy(s_action_window); s_action_window = NULL; }
+  if (s_inspector_window) { window_destroy(s_inspector_window); s_inspector_window = NULL; }
   
   window_destroy(s_main_window); 
   s_main_window = NULL;
